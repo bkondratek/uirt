@@ -1,0 +1,3 @@
+v 3
+d Bartosz Kondratek
+p uirt module to fit unidimensional Item Response Theory models

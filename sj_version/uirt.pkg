@@ -1,0 +1,29 @@
+d 'UIRT': module to fit unidimensional Item Response Theory models
+d
+d This is the SJ22-2 st0670 version of uirt used in:
+d DOI: https://doi.org/10.1177/1536867X221106368 
+d
+d Requires: Stata version 10
+d
+d Distribution-Date: 20220222
+d
+d Author:  Bartosz Kondratek
+d Support: email bartosz.kondratek@@gmail.com
+d
+f uirt.ado
+f uirt.sthlp
+f uirt_chi2w.ado
+f uirt_chi2w.sthlp
+f uirt_dif.ado
+f uirt_dif.sthlp
+f uirt_esf.ado
+f uirt_esf.sthlp
+f uirt_icc.ado
+f uirt_icc.sthlp
+f uirt_inf.ado
+f uirt_inf.sthlp
+f uirt_sx2.ado
+f uirt_sx2.sthlp
+f uirt_theta.ado
+f uirt_theta.sthlp
+f uirt-stata_journal_examples.do
