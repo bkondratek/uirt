@@ -43,7 +43,7 @@ especially in the multi-group designs.
 
 To install the latest version:
 ```commandline
-net install uirt, from(https://raw.githubusercontent.com/bkondratek/uirt/uirt_latest/) replace
+net install uirt, from(https://raw.githubusercontent.com/bkondratek/uirt/) replace
 ```
 After installation, type:
 ```commandline
@@ -52,7 +52,7 @@ h uirt
 to see a detailed help and examples.
 
 ### Other sources and versions
-You can always install ```uirt``` from ssc:
+You can always install ```uirt``` from SSC:
 ```commandline
  ssc install uirt, replace
 ```
@@ -112,6 +112,7 @@ uirt_icc q6, tw( xtitle(My own name for the {&theta} scale) )
 The dataset is small and does not provide enough information to support
 unconstrained estimation of the pseudo-guessing parameter.
 With ```uirt``` we can impose priors on parameters to circumvent this. 
+
 Fitting a 3PLM to all items with beta(5,18) distribution as
 prior for the pseudo-guessing parameter to ensure convergence:
 ```commandline
@@ -156,7 +157,7 @@ assess the item fit.
 
 Should you prefer to perform some statistical test of the item fit, 
 ```uirt``` includes the SX2 by Orlando and Thissen (2000)
-(only 0-1 items and complete data) and the more general chi2w 
+(only 0-1 items and complete data) and the more general chi2W 
 by Kondratek ([2022b](https://doi.org/10.1177/01466216221108061)):
 
 ```commandline
