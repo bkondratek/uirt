@@ -43,7 +43,7 @@ especially in the multi-group designs.
 
 To install the latest version:
 ```commandline
-net install uirt, from(https://raw.githubusercontent.com/bkondratek/uirt/) replace
+net install uirt, from(https://raw.githubusercontent.com/bkondratek/uirt/main/) replace
 ```
 After installation, type:
 ```commandline
