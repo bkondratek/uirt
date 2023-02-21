@@ -1,7 +1,13 @@
-# uirt
+## uirt
 Stata module to fit unidimensional Item Response Theory models
 
-# Description
+## Table of Contents
+[Description_a](#user-content-description)
+
+[Description_b](#description)
+
+
+## Description
 ```uirt``` can be used to fit a variety of unidimensional IRT models 
 (2PLM, 3PLM, GRM, PCM and GPCM). 
 It allows for multi-group modelling, DIF analysis, 
@@ -26,7 +32,7 @@ It was designed to efficiently handle large datasets,
 especially in the multi-group designs. 
 
 
-# Installation - latest version
+## Installation - latest version
 
 To install the latest version:
 ```commandline
@@ -38,7 +44,7 @@ h uirt
 ```
 to see a detailed help and examples.
 
-# Installation - other sources and versions
+## Installation - other sources and versions
 You can always install ```uirt``` from ssc:
 ```commandline
  ssc install uirt, replace
@@ -53,14 +59,14 @@ that was used the Stata Journal article:
 net install st0670, from(http://www.stata-journal.com/software/sj22-2) replace
 ```
 
-For your convenience, the SSC package is also available [here](https://github.com/bkondratek/uirt/tree/main/ssc_version)
-and the SJ package is available [here](https://github.com/bkondratek/uirt/tree/main/sj_version).
+For your convenience, the SSC package is also available [here](./ssc_version)
+and the SJ package is available [here](./sj_version).
 
-# Suggested citation
+## Suggested citation
 Kondratek, B. (2022). uirt: A command for unidimensional IRT modeling. 
 _The Stata Journal_, 22(2), 243-268. https://doi.org/10.1177/1536867X221106368
 
-# Acknowledgement
+## Acknowledgement
 I wish to thank Cees Glas who provided me with invaluable 
 consultancy on many parts of the estimation algorithms used in ```uirt```
 and Mateusz Zoltak for very helpful hints on Mata
