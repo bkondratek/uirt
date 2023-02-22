@@ -21,7 +21,7 @@ and introduces extensive item-fit analysis tools.
 With ```uirt``` you can also generate plausible values (PVs) 
 conditioned via latent regression. 
 
-And If you are having trouble with fitting 3PLM to your data, 
+If you are having trouble with fitting 3PLM to your data, 
 ```uirt``` will come to help, as it enables imposing priors on parameter estimation.
 Alternatively, an automated explorative search for a 3PLM-fitting 
 subset of items is also available.
@@ -75,7 +75,7 @@ Load example data used in De Boeck & Wilson (2004):
 ```commandline
 webuse masc2
 ```
-Run uirt on default settings 
+Run ```uirt``` on default settings 
 (one group, 2PLM for 0-1 items, GRM for 0-k items), 
 and ask to plot ICC for item ```q6``` using the ```uirt_icc``` 
 postestimation command:
@@ -95,7 +95,7 @@ The single-line usage will take less time
 to execute. Though, for the sake of readibility we will make use of 
 the postestimation commands in the following examples.
 
-To lear more about ```uirt``` postestimation commands type:
+To learn more about ```uirt``` postestimation commands type:
 ```commandline
 help uirt##postestimation
 ```
@@ -103,17 +103,17 @@ help uirt##postestimation
 Let us continue the analysis using the estimates from previous run 
 as starting values. We will now ask that item ```q6``` be 3PLM 
 with sub-option 'lrcrit()' turned off. 
-We will also format the graph for that item a little:
+We will also customize the graph for that item a little:
 ```commandline
 uirt q*,guess(q6,lr(1)) init(prev) 
 uirt_icc q6, tw( xtitle(My own name for the {&theta} scale) )
 ```
 
 The dataset is small and does not provide enough information to support
-unconstrained estimation of the pseudo-guessing parameter.
+unconstrained estimation of the pseudo-guessing parameter of all items.
 With ```uirt``` we can impose priors on parameters to circumvent this. 
 
-Fitting a 3PLM to all items with beta(5,18) distribution as
+Fitting a 3PLM to all items with beta(5,18) distribution as the
 prior for the pseudo-guessing parameter to ensure convergence:
 ```commandline
 uirt q*, guess(*, lr(1)) priors(*, c(5,18))
@@ -128,10 +128,10 @@ uirt_dif q1
 ```
 
 If we want to obtain ability estimates, we can ask either
-for the point estimates (expected a posteriori, EAP) with their standard
-errors of draw a set of plausible values. The plausible values can
+for the point estimates (_expected a posteriori_, EAP) with their standard
+errors or draw a set of plausible values. The plausible values can
 (and should) be conditioned by a latent regression. ```uirt``` uses 
-the Stata's powerful ```mixed``` command to run the regression part,
+the Stata's ```mixed``` command to run the regression part,
 so any model supported by it can be used for conditioning.
 
 Example:
@@ -152,18 +152,19 @@ Note that each point on the ICC graph (on the right)
 is the observed frequency of correct responses in a percentile group of
 the latent distribution. Such a fine grid 
 essentially provides us with a nonparametric response curve for that item. 
-Thus, by comparing it to the model based curve we can graphically 
+By comparing it to the model-based curve (solid line) we can graphically 
 assess the item fit.
 
 Should you prefer to perform some statistical test of the item fit, 
-```uirt``` includes the SX2 by Orlando and Thissen (2000)
-(only 0-1 items and complete data) and the more general chi2W 
-by Kondratek ([2022b](https://doi.org/10.1177/01466216221108061)):
+```uirt``` includes the SX2 (applicable only to 0-1 items 
+and complete data designs) by Orlando and Thissen (2000)
+and the more general chi2W by Kondratek 
+([2022b](https://doi.org/10.1177/01466216221108061)):
 
 ```commandline
 uirt q*         // fitting the model with defaults
 uirt_sx2 *      // SX2 for all items
-uirt_chi2w *    // chi2w for all items
+uirt_chi2w *    // chi2W for all items
 ```
 
 
