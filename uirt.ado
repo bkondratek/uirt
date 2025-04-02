@@ -974,11 +974,12 @@ syntax [varlist] [if] [in] [, GRoup(str asis)  pcm(varlist) gpcm(varlist) GUEssi
 			cap __sx2_option `sx2'
 			if(_rc){
 				di as err "{p 0 2}A problem was encountered in the  sx2() option;{p_end}"
-				di as err "{p 0 2}the proper syntax is: sx2(varlist [, minf(#)]){p_end}"
+				di as err "{p 0 2}the proper syntax is: sx2(varlist [, minf(#) bins(#)]){p_end}"
 				di as err "{p 0 2}sx2(`sx2') returns the following error:{p_end}"
 				qui __sx2_option `sx2'
 			}
 			local sx2_minfreq="`s(sx2_minfreq)'"
+			local sx2_bins="`s(sx2_bins)'"
 
 			if(strlen("`s(sx2_varlist)'")){
 				unab sx2_list: `s(sx2_varlist)'
@@ -1004,6 +1005,7 @@ syntax [varlist] [if] [in] [, GRoup(str asis)  pcm(varlist) gpcm(varlist) GUEssi
 		else{
 			m: sx2list=J(0,1,"")
 			local sx2_minfreq=""
+			local sx2_bins=""
 		}
 		
 		
@@ -1014,7 +1016,23 @@ syntax [varlist] [if] [in] [, GRoup(str asis)  pcm(varlist) gpcm(varlist) GUEssi
 			m: sx2_min_freq=`sx2_minfreq'
 		}	
 		
-				
+		
+		m: sx2_control=J(2,1,.)
+		if("`sx2_minfreq'"==""){
+			m: sx2_control[1]=1 
+		}
+		else{
+			m: sx2_control[1]=`sx2_minfreq'
+		}
+		if("`sx2_bins'"==""){
+			m: sx2_control[2]=.
+		}
+		else{
+			m: sx2_control[2]=`sx2_bins'
+		}
+		
+		
+			
 *******************************************************
 		if(strlen("`savingname'")==0){
 			local savingname="."
@@ -1044,14 +1062,14 @@ syntax [varlist] [if] [in] [, GRoup(str asis)  pcm(varlist) gpcm(varlist) GUEssi
 		}
 		
 						
-		m: uirt( "`touse'", "`items'", "`group'", `reference', `estimate_dist', `upd_quad_betw_em', "`errors'",stored_V, pcmlist, gpcmlist, guesslist, `guessing_attempts',`guessing_lrcrit', diflist,`add_theta', eap_names, "`theta_suffix'", `theta_nip', theta_scale, theta_notes, "`savingname'", "`fix_imatrix'", "`init_imatrix'", "`fix_cmatrix'", "`init_dmatrix'", "`fix_dmatrix'", `icc_cleargraphs',`icc_obs', icclist, chi2wlist, chi2w_control, sx2list, sx2_min_freq,`trace',`nip',`nit', `ninrf', `pv', "`pvreg'", `crit_ll', `crit_par', `icc_bins', `icc_pvbin', "`icc_format'",st_local("icc_tw"),icc_colours, icc_prefix_suffix, "`dif_format'",st_local("dif_tw"),dif_colours,`dif_cleargraphs', a_normal_prior, b_normal_prior, c_beta_prior, priorslist,esflist, `esf_bins', "`esf_format'",st_local("esf_tw"),esf_colour, esf_prefix_suffix, `esf_cleargraphs',`esf_obs', `esf_mode', inflist,`inf_mode', st_local("inf_tw"), `inf_ifgr', `check_a' )
+		m: uirt( "`touse'", "`items'", "`group'", `reference', `estimate_dist', `upd_quad_betw_em', "`errors'",stored_V, pcmlist, gpcmlist, guesslist, `guessing_attempts',`guessing_lrcrit', diflist,`add_theta', eap_names, "`theta_suffix'", `theta_nip', theta_scale, theta_notes, "`savingname'", "`fix_imatrix'", "`init_imatrix'", "`fix_cmatrix'", "`init_dmatrix'", "`fix_dmatrix'", `icc_cleargraphs',`icc_obs', icclist, chi2wlist, chi2w_control, sx2list, sx2_control,`trace',`nip',`nit', `ninrf', `pv', "`pvreg'", `crit_ll', `crit_par', `icc_bins', `icc_pvbin', "`icc_format'",st_local("icc_tw"),icc_colours, icc_prefix_suffix, "`dif_format'",st_local("dif_tw"),dif_colours,`dif_cleargraphs', a_normal_prior, b_normal_prior, c_beta_prior, priorslist,esflist, `esf_bins', "`esf_format'",st_local("esf_tw"),esf_colour, esf_prefix_suffix, `esf_cleargraphs',`esf_obs', `esf_mode', inflist,`inf_mode', st_local("inf_tw"), `inf_ifgr', `check_a' )
 		
 		m: stata("ereturn local cmdline "+char(34)+eret_cmdline+char(34))
 		m: eret_cmdstrip=strtrim("uirt `e(depvar)' "+eret_if+" "+eret_in+","+etet_grstrip+" nip(`nip') ninrf(`ninrf') crit_par(`crit_par') crit_ll(`crit_ll') `anegative' "+eret_priorstrip)
 		m: stata("ereturn local cmdstrip "+char(34)+eret_cmdstrip+char(34))
 		
 *clean up mata objects
-		foreach mata_obj in a_normal_prior b_normal_prior c_beta_prior chi2w_control chi2wlist diflist eret_cmdline eret_cmdstrip eret_if eret_in eret_priorstrip etet_grstrip gpcmlist guesslist icc_colours icc_prefix_suffix icclist esf_colour esf_prefix_suffix esflist dif_colours  pcmlist priorslist stored_V sx2_min_freq sx2list theta_notes theta_scale eap_names inflist{
+		foreach mata_obj in a_normal_prior b_normal_prior c_beta_prior chi2w_control chi2wlist diflist eret_cmdline eret_cmdstrip eret_if eret_in eret_priorstrip etet_grstrip gpcmlist guesslist icc_colours icc_prefix_suffix icclist esf_colour esf_prefix_suffix esflist dif_colours  pcmlist priorslist stored_V sx2_control sx2list theta_notes theta_scale eap_names inflist{
 			cap m: mata drop `mata_obj'
 		}
 		
@@ -1309,13 +1327,14 @@ end
 
 cap program drop __sx2_option
 program define __sx2_option, sclass
-syntax varlist [, MINFreq(numlist max=1 >0)] 
+syntax varlist [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)] 
 	unab allvars: *
 	if("`allvars'"=="`varlist'"){
 		local varlist=""
 	}
 	sreturn local sx2_varlist="`varlist'"
 	sreturn local sx2_minfreq="`minfreq'"
+	sreturn local sx2_bins="`bins'"
 end
 
 cap program drop __fix_option
@@ -1737,7 +1756,7 @@ mata:
 	}
 
 // THE UIRT
-	void uirt(string scalar touse, string scalar items, string scalar group, real scalar ref, real scalar estimate_dist, real scalar upd_quad_betw_em, string scalar errors, real matrix stored_V, string matrix pcmlist,string matrix gpcmlist, string matrix guesslist, real scalar guessing_attempts, real scalar guessing_lrcrit, string matrix diflist, real scalar add_theta, string matrix eap_names, string scalar theta_suffix, real scalar theta_nip, real matrix theta_scale, string scalar theta_notes, string scalar savingname , string scalar fiximatrix, string scalar initimatrix, string scalar catimatrix, string scalar initdmatrix, string scalar fixdmatrix, real scalar icc_cleargraphs, real scalar icc_obs, string matrix icclist, string matrix fitlist, real matrix chi2w_control, string matrix sx2_fitlist, real scalar sx2_min_freq, real scalar trace, real scalar nip,real scalar nit,real scalar nnirf,real scalar pv,string scalar pvreg, real scalar crit_ll, real scalar crit_par, real scalar icc_bins, real scalar icc_pvbin,string scalar icc_format, string scalar icc_tw, string matrix icc_colours, string matrix icc_prefix_suffix, string scalar dif_format, string scalar dif_tw, string matrix dif_colours, real scalar dif_cleargraphs, real matrix a_normal_prior, real matrix b_normal_prior, real matrix c_beta_prior, string matrix priorslist, string matrix esflist, real scalar esf_bins, string scalar esf_format, string scalar esf_tw, string matrix esf_colour, string matrix esf_prefix_suffix, real scalar esf_cleargraphs, real scalar esf_obs, real scalar esf_mode, string matrix inflist, real scalar inf_mode, string scalar inf_tw, inf_ifgr ,real scalar check_a){
+	void uirt(string scalar touse, string scalar items, string scalar group, real scalar ref, real scalar estimate_dist, real scalar upd_quad_betw_em, string scalar errors, real matrix stored_V, string matrix pcmlist,string matrix gpcmlist, string matrix guesslist, real scalar guessing_attempts, real scalar guessing_lrcrit, string matrix diflist, real scalar add_theta, string matrix eap_names, string scalar theta_suffix, real scalar theta_nip, real matrix theta_scale, string scalar theta_notes, string scalar savingname , string scalar fiximatrix, string scalar initimatrix, string scalar catimatrix, string scalar initdmatrix, string scalar fixdmatrix, real scalar icc_cleargraphs, real scalar icc_obs, string matrix icclist, string matrix fitlist, real matrix chi2w_control, string matrix sx2_fitlist, real matrix sx2_control, real scalar trace, real scalar nip,real scalar nit,real scalar nnirf,real scalar pv,string scalar pvreg, real scalar crit_ll, real scalar crit_par, real scalar icc_bins, real scalar icc_pvbin,string scalar icc_format, string scalar icc_tw, string matrix icc_colours, string matrix icc_prefix_suffix, string scalar dif_format, string scalar dif_tw, string matrix dif_colours, real scalar dif_cleargraphs, real matrix a_normal_prior, real matrix b_normal_prior, real matrix c_beta_prior, string matrix priorslist, string matrix esflist, real scalar esf_bins, string scalar esf_format, string scalar esf_tw, string matrix esf_colour, string matrix esf_prefix_suffix, real scalar esf_cleargraphs, real scalar esf_obs, real scalar esf_mode, string matrix inflist, real scalar inf_mode, string scalar inf_tw, inf_ifgr ,real scalar check_a){
 	
 		N_iter		=nit
 		N_iter_NRF	=nnirf
@@ -1836,7 +1855,7 @@ mata:
 		
 		//checking if sx2 can be computed
 		if(rows(sx2_fitlist)){
-			check_sx2(Q, G, sx2_fitlist)
+			check_sx2(Q, G, sx2_fitlist, sx2_control)
 		}
 		
 		
@@ -2036,7 +2055,7 @@ mata:
 		
 		if(sum(Q.get(Q.fit_sx2,.))){
 					
-			SX2(Q, cloneG(G),  sx2_min_freq,  point_Uigc, point_Fg)
+			SX2(Q, cloneG(G), sx2_control,  point_Uigc, point_Fg)
 			
 			fit_indx=select((1::Q.n),Q.get(Q.fit_sx2,.))
 			
@@ -6238,7 +6257,7 @@ mata:
 	}
 	
 // FIT functions
-	void SX2(_Q, _Gx, real scalar sx2_min_freq, pointer matrix point_Uigc, pointer matrix point_Fg){
+	void SX2(_Q, _Gx, real matrix sx2_control, pointer matrix point_Uigc, pointer matrix point_Fg){	
 	
 		class ITEMS scalar Q
 		Q=_Q
@@ -6257,7 +6276,8 @@ mata:
 			Eik_i=*LW_results[1]
 			Sk_all_i=*LW_results[2]
 			
-			collapse_cats_results=sx2_collapse_cats(Eik_i,Sk_all_i,sx2_min_freq, sum(*point_Fg[1]))
+
+			collapse_cats_results=sx2_collapse_cats(Eik_i,Sk_all_i,sx2_control, sum(*point_Fg[1]))
 			Eik=*collapse_cats_results[1]
 			score_range=*collapse_cats_results[2]
 			
@@ -6305,9 +6325,13 @@ mata:
 		
 		return(results)
 	
-	}	
+	}
 	
-	pointer sx2_collapse_cats(real matrix Eik_in, real matrix Sk_all_in, real scalar sx2_min_freq, real scalar N_obs){
+	
+	pointer sx2_collapse_cats(real matrix Eik_in, real matrix Sk_all_in, real matrix sx2_control, real scalar N_obs){
+	
+		sx2_min_freq = sx2_control[1]
+	 	sx2_fixed_K = sx2_control[2]
 	
 		Eik=Eik_in
 		Sk_all=Sk_all_in
@@ -6320,73 +6344,129 @@ mata:
 		
 		n_sc=rows(Sk_all)
 		score_range=(1::n_sc),(1::n_sc)
-		exp_freq_1=N:*Sk_all:*Eik
-		for(i=1;i<=n_sc;i++){
-			if(exp_freq_1[i]<sx2_min_freq){
-				if(rows(score_range)>2){
-					if(i==1){
-						Eik = ( (Eik[i::i+1]'*Sk_all[i::i+1])/sum(Sk_all[i::i+1]) ) \ Eik[i+2::n_sc]
-						Sk_all = sum(Sk_all[i::i+1])\ Sk_all[i+2::n_sc]
-						score_range = (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
-					}
-					if(i>1 & i<=n_sc-2){
-						Eik = Eik[1::i-1] \ ( (Eik[i::i+1]'*Sk_all[i::i+1])/sum(Sk_all[i::i+1]) ) \ Eik[i+2::n_sc]
-						Sk_all = Sk_all[1::i-1] \ sum(Sk_all[i::i+1]) \ Sk_all[i+2::n_sc]
-						score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
-					}
-					if(i==n_sc-1){
-						Eik = Eik[1::i-1] \ ( (Eik[i::i+1]'*Sk_all[i::i+1])/sum(Sk_all[i::i+1]) )
-						Sk_all = Sk_all[1::i-1] \ sum(Sk_all[i::i+1])
-						score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2])
-					}
-					if(i==n_sc){
-						Eik = Eik[1::i-2] \ ( (Eik[i-1::i]'*Sk_all[i-1::i])/sum(Sk_all[i-1::i]) )  
-						Sk_all = Sk_all[1::i-2] \ sum(Sk_all[i-1::i])
-						score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
-					}
-					exp_freq_1=N:*Sk_all:*Eik
-					n_sc=n_sc-1
-					i=i-1
-				}
-				else{
-					warning="could not collapse cats with sx2_min_freq="+strofreal(sx2_min_freq)
-				}
-			}
-		}
 		
-		exp_freq_0=N:*Sk_all:*(1:-Eik)
-		i=n_sc
-		while(n_sc>1 & i>2){
-			if(exp_freq_0[i]<sx2_min_freq){
-				if(rows(score_range)>2){
-					if(i==n_sc){
-						Eik = Eik[1::i-2] \ ( (Eik[i-1::i]'*Sk_all[i-1::i])/sum(Sk_all[i-1::i]) )  
-						Sk_all = Sk_all[1::i-2] \ sum(Sk_all[i-1::i])
-						score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
+		if(sx2_fixed_K==.){
+			exp_freq_1=N:*Sk_all:*Eik
+			for(i=1;i<=n_sc;i++){
+				if(exp_freq_1[i]<sx2_min_freq){
+					if(rows(score_range)>2){
+						if(i==1){
+							Eik = ( (Eik[i::i+1]'*Sk_all[i::i+1])/sum(Sk_all[i::i+1]) ) \ Eik[i+2::n_sc]
+							Sk_all = sum(Sk_all[i::i+1])\ Sk_all[i+2::n_sc]
+							score_range = (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
+						}
+						if(i>1 & i<=n_sc-2){
+							Eik = Eik[1::i-1] \ ( (Eik[i::i+1]'*Sk_all[i::i+1])/sum(Sk_all[i::i+1]) ) \ Eik[i+2::n_sc]
+							Sk_all = Sk_all[1::i-1] \ sum(Sk_all[i::i+1]) \ Sk_all[i+2::n_sc]
+							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
+						}
+						if(i==n_sc-1){
+							Eik = Eik[1::i-1] \ ( (Eik[i::i+1]'*Sk_all[i::i+1])/sum(Sk_all[i::i+1]) )
+							Sk_all = Sk_all[1::i-1] \ sum(Sk_all[i::i+1])
+							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2])
+						}
+						if(i==n_sc){
+							Eik = Eik[1::i-2] \ ( (Eik[i-1::i]'*Sk_all[i-1::i])/sum(Sk_all[i-1::i]) )  
+							Sk_all = Sk_all[1::i-2] \ sum(Sk_all[i-1::i])
+							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
+						}
+						exp_freq_1=N:*Sk_all:*Eik
+						n_sc=n_sc-1
+						i=i-1
 					}
 					else{
-						Eik= Eik[1::i-2] \ ( (Eik[i-1::i]'*Sk_all[i-1::i])/sum(Sk_all[i-1::i]) ) \ Eik[i+1::n_sc]
-						Sk_all= Sk_all[1::i-2] \ sum(Sk_all[i-1::i]) \ Sk_all[i+1::n_sc]
-						score_range= score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2]) \ score_range[i+1::n_sc,]
+						warning="could not collapse cats with sx2_min_freq="+strofreal(sx2_min_freq)
 					}
-					exp_freq_0=N:*Sk_all:*(1:-Eik)
-					n_sc=n_sc-1
-				}
-				else{
-					warning="could not collapse cats with sx2_min_freq="+strofreal(sx2_min_freq)
 				}
 			}
-			i=i-1
+			
+			exp_freq_0=N:*Sk_all:*(1:-Eik)
+			i=n_sc
+			while(n_sc>1 & i>2){
+				if(exp_freq_0[i]<sx2_min_freq){
+					if(rows(score_range)>2){
+						if(i==n_sc){
+							Eik = Eik[1::i-2] \ ( (Eik[i-1::i]'*Sk_all[i-1::i])/sum(Sk_all[i-1::i]) )  
+							Sk_all = Sk_all[1::i-2] \ sum(Sk_all[i-1::i])
+							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
+						}
+						else{
+							Eik= Eik[1::i-2] \ ( (Eik[i-1::i]'*Sk_all[i-1::i])/sum(Sk_all[i-1::i]) ) \ Eik[i+1::n_sc]
+							Sk_all= Sk_all[1::i-2] \ sum(Sk_all[i-1::i]) \ Sk_all[i+1::n_sc]
+							score_range= score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2]) \ score_range[i+1::n_sc,]
+						}
+						exp_freq_0=N:*Sk_all:*(1:-Eik)
+						n_sc=n_sc-1
+					}
+					else{
+						warning="could not collapse cats with sx2_min_freq="+strofreal(sx2_min_freq)
+					}
+				}
+				i=i-1
+			}
+			
+			exp_freq_1=N:*Sk_all:*Eik
+			exp_NPQ = exp_freq_1 :* (1 :- Eik)
+			
 		}
-		exp_freq_1=N:*Sk_all:*Eik
+		else{
 		
-		results=J(6,1,NULL)
+		    // Edge case: not enough score levels, but it should already be sorted out by sx2_check()
+		    if (rows(Eik) <= sx2_fixed_K) {
+		        warning = "too few score categories to collapse to sx2_fixed_K=" + strofreal(sx2_fixed_K)
+		    }
+		    else{
+
+			    exp_NPQ = N :* Sk_all :* Eik :* (1 :- Eik)
+			
+			    // greedy merging to reach sx2_fixed_K bins
+			    while (rows(Eik) > sx2_fixed_K) {	
+			    	best_loss = .
+			        for (i = 1; i < rows(Eik); i++) {
+			            avg = ( sum(exp_NPQ) / (rows(Eik)-1) ) // alternatively, we could target sx2_fixed_K from the get go..
+			            loss = abs(sum(exp_NPQ[i::i+1]) - avg)
+			            if (loss < best_loss) {
+			                best_loss = loss
+			                best_idx = i
+			            }
+			        }
+			
+			        // Merge bins at best_idx and best_idx+1
+			        Eik[best_idx] = Eik[best_idx::best_idx+1]' * Sk_all[best_idx::best_idx+1] / sum(Sk_all[best_idx::best_idx+1])
+			        Sk_all[best_idx] = sum(Sk_all[best_idx::best_idx+1])
+			        score_range[best_idx, 2] = score_range[best_idx+1, 2]
+			        exp_NPQ[best_idx] = N * Sk_all[best_idx] * Eik[best_idx] * (1 - Eik[best_idx])
+			
+			        // Remove merged row
+			        if(best_idx+2<=rows(Eik)){
+				        Eik = Eik[1::best_idx] \ Eik[(best_idx+2)::rows(Eik)]
+				        Sk_all = Sk_all[1::best_idx] \ Sk_all[(best_idx+2)::rows(Sk_all)]
+				        score_range = score_range[1::best_idx, .] \ score_range[(best_idx+2)::rows(score_range), .]
+				        exp_NPQ = exp_NPQ[1::best_idx] \ exp_NPQ[(best_idx+2)::rows(exp_NPQ)]
+					}
+					else{
+					   	Eik = Eik[1::best_idx]
+						Sk_all = Sk_all[1::best_idx]
+						score_range = score_range[1::best_idx, .]
+						exp_NPQ = exp_NPQ[1::best_idx]
+					}
+			    }
+			}
+		    
+			exp_freq_0=N:*Sk_all:*(1:-Eik) 
+			exp_freq_1=N:*Sk_all:*Eik 
+		}
+
+   		
+		
+		results=J(7,1,NULL)
 		results[1]=return_pointer(Eik)
 		results[2]=return_pointer(score_range)
 		results[3]=return_pointer(Sk_all)
 		results[4]=return_pointer(exp_freq_1)
 		results[5]=return_pointer(exp_freq_0)
-		results[6]=&warning
+		results[6]=return_pointer(exp_NPQ)
+		results[7]=&warning
 		
 		return(results)
 	
@@ -7758,7 +7838,7 @@ mata:
 		return(results)
 	}
 	
-	void check_sx2(_Q, _G, string matrix sx2_fitlist){
+	void check_sx2(_Q, _G, string matrix sx2_fitlist, real matrix sx2_control){
 		class ITEMS scalar Q
 		Q=_Q
 	
@@ -7816,6 +7896,17 @@ mata:
 					display("      there is only "+strofreal(sum(viable_for_sx2))+" such items, SX2 will not be computed")
 					if_fit_sx2=J(Q.n,1,0)
 					viable_for_sx2=J(Q.n,1,0)
+				}
+				else{
+					if( sx2_control[2]!=. ){
+						if( sx2_control[2] < N_for_sx2_required-2 ){
+							display("Note: the bins("+strofreal(sx2_control[2])+") option of sx2 will be ignored;")
+							display("      you requested too few score categories to get df=1 under the models used;")
+							display("      if possible, scores will be collapsed to meet minfreq("+strofreal(sx2_control[1])+")")
+							sx2_control[2] = .
+						}
+						// else{} <-- consider reporting that minfreq will be ignored
+					}
 				}
 			}
 		}
