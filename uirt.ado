@@ -6275,11 +6275,13 @@ mata:
 			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i])
 			Eik_i=*LW_results[1]
 			Sk_all_i=*LW_results[2]
+			dEik_i=*LW_results[3]
 			
 
-			collapse_cats_results=sx2_collapse_cats(Eik_i,Sk_all_i,sx2_control, sum(*point_Fg[1]))
+			collapse_cats_results=sx2_collapse_cats(Eik_i,dEik_i,Sk_all_i,sx2_control, sum(*point_Fg[1]))
 			Eik=*collapse_cats_results[1]
 			score_range=*collapse_cats_results[2]
+			dEik=*collapse_cats_results[3]
 			
 			n_est_par	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
 
@@ -6328,12 +6330,13 @@ mata:
 	}
 	
 	
-	pointer sx2_collapse_cats(real matrix Eik_in, real matrix Sk_all_in, real matrix sx2_control, real scalar N_obs){
+	pointer sx2_collapse_cats(real matrix Eik_in, real matrix dEik_in, real matrix Sk_all_in, real matrix sx2_control, real scalar N_obs){
 	
 		sx2_min_freq = sx2_control[1]
 	 	sx2_fixed_K = sx2_control[2]
 	
 		Eik=Eik_in
+		dEik = dEik_in
 		Sk_all=Sk_all_in
 		N=N_obs
 		
@@ -6351,23 +6354,31 @@ mata:
 				if(exp_freq_1[i]<sx2_min_freq){
 					if(rows(score_range)>2){
 						if(i==1){
-							Eik = ( (Eik[i::i+1]'*Sk_all[i::i+1])/sum(Sk_all[i::i+1]) ) \ Eik[i+2::n_sc]
-							Sk_all = sum(Sk_all[i::i+1])\ Sk_all[i+2::n_sc]
+							w = Sk_all[i::i+1]
+							Eik = (Eik[i::i+1]'*w)/sum(w) \ Eik[i+2::n_sc]
+							dEik = (w[1]*dEik[i,.] + w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
+							Sk_all = sum(w) \ Sk_all[i+2::n_sc]
 							score_range = (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
 						}
 						if(i>1 & i<=n_sc-2){
-							Eik = Eik[1::i-1] \ ( (Eik[i::i+1]'*Sk_all[i::i+1])/sum(Sk_all[i::i+1]) ) \ Eik[i+2::n_sc]
-							Sk_all = Sk_all[1::i-1] \ sum(Sk_all[i::i+1]) \ Sk_all[i+2::n_sc]
+							w = Sk_all[i::i+1]
+							Eik = Eik[1::i-1] \ (Eik[i::i+1]'*w)/sum(w) \ Eik[i+2::n_sc]
+							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] + w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
+							Sk_all = Sk_all[1::i-1] \ sum(w) \ Sk_all[i+2::n_sc]
 							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
 						}
 						if(i==n_sc-1){
-							Eik = Eik[1::i-1] \ ( (Eik[i::i+1]'*Sk_all[i::i+1])/sum(Sk_all[i::i+1]) )
-							Sk_all = Sk_all[1::i-1] \ sum(Sk_all[i::i+1])
+							w = Sk_all[i::i+1]
+							Eik = Eik[1::i-1] \ (Eik[i::i+1]'*w)/sum(w)
+							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] + w[2]*dEik[i+1,.]) / sum(w)
+							Sk_all = Sk_all[1::i-1] \ sum(w)
 							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2])
 						}
 						if(i==n_sc){
-							Eik = Eik[1::i-2] \ ( (Eik[i-1::i]'*Sk_all[i-1::i])/sum(Sk_all[i-1::i]) )  
-							Sk_all = Sk_all[1::i-2] \ sum(Sk_all[i-1::i])
+							w = Sk_all[i-1::i]
+							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w)
+							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] + w[2]*dEik[i,.]) / sum(w)
+							Sk_all = Sk_all[1::i-2] \ sum(w)
 							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
 						}
 						exp_freq_1=N:*Sk_all:*Eik
@@ -6386,13 +6397,17 @@ mata:
 				if(exp_freq_0[i]<sx2_min_freq){
 					if(rows(score_range)>2){
 						if(i==n_sc){
-							Eik = Eik[1::i-2] \ ( (Eik[i-1::i]'*Sk_all[i-1::i])/sum(Sk_all[i-1::i]) )  
-							Sk_all = Sk_all[1::i-2] \ sum(Sk_all[i-1::i])
+							w = Sk_all[i-1::i]
+							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w)
+							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] + w[2]*dEik[i,.]) / sum(w)
+							Sk_all = Sk_all[1::i-2] \ sum(w)
 							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
 						}
 						else{
-							Eik= Eik[1::i-2] \ ( (Eik[i-1::i]'*Sk_all[i-1::i])/sum(Sk_all[i-1::i]) ) \ Eik[i+1::n_sc]
-							Sk_all= Sk_all[1::i-2] \ sum(Sk_all[i-1::i]) \ Sk_all[i+1::n_sc]
+							w = Sk_all[i-1::i]
+							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w) \ Eik[i+1::n_sc]
+							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] + w[2]*dEik[i,.]) / sum(w) \ dEik[i+1::n_sc,.]
+							Sk_all = Sk_all[1::i-2] \ sum(w) \ Sk_all[i+1::n_sc]
 							score_range= score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2]) \ score_range[i+1::n_sc,]
 						}
 						exp_freq_0=N:*Sk_all:*(1:-Eik)
@@ -6432,7 +6447,9 @@ mata:
 			        }
 			
 			        // Merge bins at best_idx and best_idx+1
-			        Eik[best_idx] = Eik[best_idx::best_idx+1]' * Sk_all[best_idx::best_idx+1] / sum(Sk_all[best_idx::best_idx+1])
+			        w = Sk_all[best_idx::best_idx+1]
+			        Eik[best_idx] = Eik[best_idx::best_idx+1]' * w / sum(w)
+			        dEik[best_idx,.] = (w[1]*dEik[best_idx,.] + w[2]*dEik[best_idx+1,.]) / sum(w)
 			        Sk_all[best_idx] = sum(Sk_all[best_idx::best_idx+1])
 			        score_range[best_idx, 2] = score_range[best_idx+1, 2]
 			        exp_NPQ[best_idx] = N * Sk_all[best_idx] * Eik[best_idx] * (1 - Eik[best_idx])
@@ -6440,12 +6457,14 @@ mata:
 			        // Remove merged row
 			        if(best_idx+2<=rows(Eik)){
 				        Eik = Eik[1::best_idx] \ Eik[(best_idx+2)::rows(Eik)]
+				        dEik = dEik[1::best_idx,.] \ dEik[(best_idx+2)::rows(dEik),.]
 				        Sk_all = Sk_all[1::best_idx] \ Sk_all[(best_idx+2)::rows(Sk_all)]
 				        score_range = score_range[1::best_idx, .] \ score_range[(best_idx+2)::rows(score_range), .]
 				        exp_NPQ = exp_NPQ[1::best_idx] \ exp_NPQ[(best_idx+2)::rows(exp_NPQ)]
 					}
 					else{
 					   	Eik = Eik[1::best_idx]
+					   	dEik = dEik[1::best_idx,.]
 						Sk_all = Sk_all[1::best_idx]
 						score_range = score_range[1::best_idx, .]
 						exp_NPQ = exp_NPQ[1::best_idx]
@@ -6459,14 +6478,15 @@ mata:
 
    		
 		
-		results=J(7,1,NULL)
+		results=J(8,1,NULL)
 		results[1]=return_pointer(Eik)
 		results[2]=return_pointer(score_range)
 		results[3]=return_pointer(Sk_all)
 		results[4]=return_pointer(exp_freq_1)
 		results[5]=return_pointer(exp_freq_0)
 		results[6]=return_pointer(exp_NPQ)
-		results[7]=&warning
+		results[7]=return_pointer(dEik)
+		results[8]=&warning
 		
 		return(results)
 	
@@ -6502,11 +6522,27 @@ mata:
 			}
 		}
 		
-		Sk_less=J(I+1,K,1)
+		// derivatives necessary to obtain the gradient
+		a = parameters_g[I,1]
+		b = parameters_g[I,2]
+		if(model_curr_asked_g[I,1] != "3plm"){
+			dTi_Xk = J(2, K, .)
+			PQ = f_PiXk_matrix[I,.] :* (1 :- f_PiXk_matrix[I,.])
+			dTi_Xk[1,.] = (quadpts :- b) :* PQ // a
+			dTi_Xk[2,.] = -a :* PQ // b
+		}
+		else{
+			dTi_theta = J(3, K, .)
+			c = parameters_g[I,3]
+			PcQ = (f_PiXk_matrix[I,.] :- c) :* (1 :- f_PiXk_matrix[I,.])
+			dTi_Xk[1,.] = (quadpts :- b) :* PcQ // a
+			dTi_Xk[2,.] = -a :* (1 :- c) :* PcQ // b
+			dTi_Xk[3,.] = 1 :- (f_PiXk_matrix[I,.] :- c) :/ (1 :- c) // c
+		}
 		
+		Sk_less=J(I+1,K,1)
 		Sk_less[1,]=(1:-f_PiXk_matrix[1,]) 
 		Sk_less[2,]=f_PiXk_matrix[1,] 
-
 		for(i=2;i<=I-1;i++){
 			current=Sk_less[1,]
 			Sk_less[1,]=current :*(1:-f_PiXk_matrix[i,]) 
@@ -6520,7 +6556,6 @@ mata:
 		}
 		
 		Sk_all=Sk_less
-		
 		for(i=I;i<=I;i++){
 			current=Sk_all[1,]
 			Sk_all[1,]= current :*(1:-f_PiXk_matrix[i,]) 
@@ -6534,13 +6569,25 @@ mata:
 		}
 
 		Eik=J(I-1,1,.)
+		dEik = J(I-1, rows(dTi_Xk), .)
 		for(i=1;i<=I-1;i++){
-			Eik[i] =	rowsum(P_quadpts :* (f_PiXk_matrix[I,] :* Sk_less[i,]) ):/ rowsum(P_quadpts :* Sk_all[i+1,])
-		}	
+			Nk = rowsum(P_quadpts :* (f_PiXk_matrix[I,.] :* Sk_less[i,.]) )
+			Dk = rowsum(P_quadpts :* Sk_all[i+1,.])
+			Eik[i] = Nk / Dk
+			for(p = 1; p <= rows(dTi_Xk); p++){
+				dNk = rowsum(P_quadpts :* (dTi_Xk[p,.] :* Sk_less[i,.]))
+				
+				Sk_diff = Sk_less[i,] :- Sk_less[i+1,]
+				dDk = rowsum(P_quadpts :* (dTi_Xk[p,.] :* Sk_diff))
+				
+				dEik[i, p] = (Dk * dNk - Nk * dDk) / (Dk^2)
+			}
+		}
 		
-		results=J(2,1,NULL)
+		results=J(3,1,NULL)
 		results[1]=return_pointer(Eik)
 		results[2]=return_pointer(rowsum(P_quadpts :* Sk_all))
+		results[3]=return_pointer(dEik)
 		return(results)
 	
 	}
