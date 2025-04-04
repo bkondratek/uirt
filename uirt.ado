@@ -1,6 +1,6 @@
 *uirt.ado 
-*ver 2.2.1
-*2022.11.13
+*ver 2.3.0
+*2025.04.04
 *everythingthatcounts@gmail.com
 
 capture prog drop uirt
@@ -2055,7 +2055,7 @@ mata:
 		
 		if(sum(Q.get(Q.fit_sx2,.))){
 					
-			SX2(Q, cloneG(G), sx2_control,  point_Uigc, point_Fg)
+			SX2(Q, cloneG(G), sx2_control,  point_Uigc, point_Fg, V)
 			
 			fit_indx=select((1::Q.n),Q.get(Q.fit_sx2,.))
 			
@@ -2088,39 +2088,7 @@ mata:
 	
 //MATRICES
 	eret_b			= create_long_vector(Q, G, "pars")'
-	eret_b_colnames	= J(2,cols(eret_b),"")
-	range_start=1
-	for(g=1;g<=G.n;g++){
-			range_stop=range_start+2-1
-			eret_b_colnames[1,range_start..range_stop]=J(1,2,"group_"+strofreal(G.get(G.val,g)))
-			eret_b_colnames[2,range_start..range_stop]=("mean_theta","sd_theta")
-			range_start=range_stop+1
-	}
-	for(i=1;i<=Q.n;i++){
-		inpar=Q.get(Q.n_par,i)
-		range_stop=range_start+inpar-1
-		eret_b_colnames[1,range_start..range_stop]=J(1,inpar,Q.get(Q.names,i))
-		model_i=Q.get(Q.m_curr,i)
-		if(model_i=="1plm"){
-			eret_b_colnames[2,range_start..range_stop]=model_i:+("_b")
-		}		
-		if(model_i=="2plm"){
-			eret_b_colnames[2,range_start..range_stop]=model_i:+("_a","_b")
-		}
-		if(model_i=="3plm"){
-			eret_b_colnames[2,range_start..range_stop]=model_i:+("_a","_b","_c")
-		}
-		if(model_i=="pcm"){
-			eret_b_colnames[2,range_start..range_stop]=model_i:+("_a",("_b":+strofreal(1..inpar-1)))
-		}
-		if(model_i=="gpcm"){
-			eret_b_colnames[2,range_start..range_stop]=model_i:+("_a",("_b":+strofreal(1..inpar-1)))
-		}		
-		if(model_i=="grm"){
-			eret_b_colnames[2,range_start..range_stop]=model_i:+("_a",("_b":+strofreal(1..inpar-1)))
-		}
-		range_start=range_stop+1
-	}
+	eret_b_colnames = create_long_vector_pars_colnames(Q, G, cols(eret_b))
 
 // parameter matrix
 	st_matrix("b",eret_b)
@@ -2913,6 +2881,49 @@ mata:
 			range_start=range_stop+1
 		}
 		return(long_vector)
+	}
+	
+	
+	function create_long_vector_pars_colnames(_Q, _G, real scalar n_pars){
+		class ITEMS scalar Q
+		Q=_Q
+		class GROUPS scalar G
+		G=_G
+		
+		eret_b_colnames	= J(2,n_pars,"")
+		range_start=1
+		for(g=1;g<=G.n;g++){
+				range_stop=range_start+2-1
+				eret_b_colnames[1,range_start..range_stop]=J(1,2,"group_"+strofreal(G.get(G.val,g)))
+				eret_b_colnames[2,range_start..range_stop]=("mean_theta","sd_theta")
+				range_start=range_stop+1
+		}
+		for(i=1;i<=Q.n;i++){
+			inpar=Q.get(Q.n_par,i)
+			range_stop=range_start+inpar-1
+			eret_b_colnames[1,range_start..range_stop]=J(1,inpar,Q.get(Q.names,i))
+			model_i=Q.get(Q.m_curr,i)
+			if(model_i=="1plm"){
+				eret_b_colnames[2,range_start..range_stop]=model_i:+("_b")
+			}		
+			if(model_i=="2plm"){
+				eret_b_colnames[2,range_start..range_stop]=model_i:+("_a","_b")
+			}
+			if(model_i=="3plm"){
+				eret_b_colnames[2,range_start..range_stop]=model_i:+("_a","_b","_c")
+			}
+			if(model_i=="pcm"){
+				eret_b_colnames[2,range_start..range_stop]=model_i:+("_a",("_b":+strofreal(1..inpar-1)))
+			}
+			if(model_i=="gpcm"){
+				eret_b_colnames[2,range_start..range_stop]=model_i:+("_a",("_b":+strofreal(1..inpar-1)))
+			}		
+			if(model_i=="grm"){
+				eret_b_colnames[2,range_start..range_stop]=model_i:+("_a",("_b":+strofreal(1..inpar-1)))
+			}
+			range_start=range_stop+1
+		}
+		return(eret_b_colnames)
 	}
 
 
@@ -6257,7 +6268,7 @@ mata:
 	}
 	
 // FIT functions
-	void SX2(_Q, _Gx, real matrix sx2_control, pointer matrix point_Uigc, pointer matrix point_Fg){	
+	void SX2(_Q, _Gx, real matrix sx2_control, pointer matrix point_Uigc, pointer matrix point_Fg, real matrix V){	
 	
 		class ITEMS scalar Q
 		Q=_Q
@@ -6268,20 +6279,25 @@ mata:
 		item_indx=select((1::I),Q.get(Q.fit_sx2,.))
 		I_fit=rows(item_indx)
 		
+		V_rownames = create_long_vector_pars_colnames(Q, Gx, rows(V))'
+
 		S=sx2_S(Q.get(Q.viable_sx2,.), point_Uigc, point_Fg)
 		
 		for(i=1;i<=I_fit;i++){
 		
-			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i])
+			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i], sum(*point_Fg[1]))
 			Eik_i=*LW_results[1]
 			Sk_all_i=*LW_results[2]
 			dEik_i=*LW_results[3]
 			
-
 			collapse_cats_results=sx2_collapse_cats(Eik_i,dEik_i,Sk_all_i,sx2_control, sum(*point_Fg[1]))
 			Eik=*collapse_cats_results[1]
 			score_range=*collapse_cats_results[2]
-			dEik=*collapse_cats_results[3]
+			dEik=*collapse_cats_results[7]
+			
+			v_i_range = select((1::rows(V)), V_rownames[.,1]:== Q.get(Q.names,item_indx[i])) // we are assuming par order is fixed (as for now - it is)
+			v_i = V[v_i_range,v_i_range']
+			cov_SX2 = I(rows(dEik)) - dEik*v_i*dEik' // TLD - return it somewhere :)
 			
 			n_est_par	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
 
@@ -6356,28 +6372,28 @@ mata:
 						if(i==1){
 							w = Sk_all[i::i+1]
 							Eik = (Eik[i::i+1]'*w)/sum(w) \ Eik[i+2::n_sc]
-							dEik = (w[1]*dEik[i,.] + w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
+							dEik = (w[1]*dEik[i,.] :+ w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
 							Sk_all = sum(w) \ Sk_all[i+2::n_sc]
 							score_range = (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
 						}
 						if(i>1 & i<=n_sc-2){
 							w = Sk_all[i::i+1]
 							Eik = Eik[1::i-1] \ (Eik[i::i+1]'*w)/sum(w) \ Eik[i+2::n_sc]
-							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] + w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
+							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] :+ w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
 							Sk_all = Sk_all[1::i-1] \ sum(w) \ Sk_all[i+2::n_sc]
 							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
 						}
 						if(i==n_sc-1){
 							w = Sk_all[i::i+1]
 							Eik = Eik[1::i-1] \ (Eik[i::i+1]'*w)/sum(w)
-							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] + w[2]*dEik[i+1,.]) / sum(w)
+							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] :+ w[2]*dEik[i+1,.]) / sum(w)
 							Sk_all = Sk_all[1::i-1] \ sum(w)
 							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2])
 						}
 						if(i==n_sc){
 							w = Sk_all[i-1::i]
 							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w)
-							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] + w[2]*dEik[i,.]) / sum(w)
+							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] :+ w[2]*dEik[i,.]) / sum(w)
 							Sk_all = Sk_all[1::i-2] \ sum(w)
 							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
 						}
@@ -6399,14 +6415,14 @@ mata:
 						if(i==n_sc){
 							w = Sk_all[i-1::i]
 							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w)
-							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] + w[2]*dEik[i,.]) / sum(w)
+							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] :+ w[2]*dEik[i,.]) / sum(w)
 							Sk_all = Sk_all[1::i-2] \ sum(w)
 							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
 						}
 						else{
 							w = Sk_all[i-1::i]
 							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w) \ Eik[i+1::n_sc]
-							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] + w[2]*dEik[i,.]) / sum(w) \ dEik[i+1::n_sc,.]
+							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] :+ w[2]*dEik[i,.]) / sum(w) \ dEik[i+1::n_sc,.]
 							Sk_all = Sk_all[1::i-2] \ sum(w) \ Sk_all[i+1::n_sc]
 							score_range= score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2]) \ score_range[i+1::n_sc,]
 						}
@@ -6449,7 +6465,7 @@ mata:
 			        // Merge bins at best_idx and best_idx+1
 			        w = Sk_all[best_idx::best_idx+1]
 			        Eik[best_idx] = Eik[best_idx::best_idx+1]' * w / sum(w)
-			        dEik[best_idx,.] = (w[1]*dEik[best_idx,.] + w[2]*dEik[best_idx+1,.]) / sum(w)
+			        dEik[best_idx,.] = (w[1]*dEik[best_idx,.] :+ w[2]*dEik[best_idx+1,.]) / sum(w)
 			        Sk_all[best_idx] = sum(Sk_all[best_idx::best_idx+1])
 			        score_range[best_idx, 2] = score_range[best_idx+1, 2]
 			        exp_NPQ[best_idx] = N * Sk_all[best_idx] * Eik[best_idx] * (1 - Eik[best_idx])
@@ -6493,7 +6509,7 @@ mata:
 	}
 	
 		
-	pointer sx2_lord_wingersky(_Q, _Gx, real scalar item_for_fit){
+	pointer sx2_lord_wingersky(_Q, _Gx, real scalar item_for_fit, real scalar N_obs){
 	
 		class ITEMS scalar Q
 		Q=_Q
@@ -6568,25 +6584,43 @@ mata:
 			Sk_all[i+1,]=  ( previous :*f_PiXk_matrix[i,] ) 
 		}
 
+		Sk_all = rowsum(P_quadpts :* Sk_all) // i+1 corresponds to i in Eik; Denominator of Eik
+		
 		Eik=J(I-1,1,.)
-		dEik = J(I-1, rows(dTi_Xk), .)
+		N_Eik=J(I-1,1,.)
+		D_Eik=J(I-1,1,.)
+		dN_Eik = J(I-1,rows(dTi_Xk),.)
+		dD_Eik = J(I-1,rows(dTi_Xk),.)	
 		for(i=1;i<=I-1;i++){
 			Nk = rowsum(P_quadpts :* (f_PiXk_matrix[I,.] :* Sk_less[i,.]) )
-			Dk = rowsum(P_quadpts :* Sk_all[i+1,.])
+			Dk = Sk_all[i+1,.]
 			Eik[i] = Nk / Dk
+			N_Eik[i] = Nk
+			D_Eik[i] = Dk
 			for(p = 1; p <= rows(dTi_Xk); p++){
 				dNk = rowsum(P_quadpts :* (dTi_Xk[p,.] :* Sk_less[i,.]))
+				dN_Eik[i,p] = dNk
 				
 				Sk_diff = Sk_less[i,] :- Sk_less[i+1,]
 				dDk = rowsum(P_quadpts :* (dTi_Xk[p,.] :* Sk_diff))
-				
-				dEik[i, p] = (Dk * dNk - Nk * dDk) / (Dk^2)
+				dD_Eik[i,p] = dDk
+			}
+
+		}
+		
+		dEik = J(I-1, rows(dTi_Xk), .) // note that Eik are expected proportions, but dEik are for expected counts!!
+		N=N_obs-N_obs*(Sk_all[1]+Sk_all[rows(Sk_all)]) // ignoring extreme scores
+		sum_D_Eik = sum(D_Eik)
+		sum_dD_Eik = colsum(dD_Eik)
+		for(i=1;i<=I-1;i++){
+			for(p = 1; p <= rows(dTi_Xk); p++){				
+				dEik[i, p] = N * ( dN_Eik[i,p] / sum_D_Eik  - N_Eik[i] * sum_dD_Eik[p]  / sum_D_Eik^2 )
 			}
 		}
 		
 		results=J(3,1,NULL)
 		results[1]=return_pointer(Eik)
-		results[2]=return_pointer(rowsum(P_quadpts :* Sk_all))
+		results[2]=return_pointer(Sk_all)
 		results[3]=return_pointer(dEik)
 		return(results)
 	
