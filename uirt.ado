@@ -2060,7 +2060,8 @@ mata:
 			fit_indx=select((1::Q.n),Q.get(Q.fit_sx2,.))
 			
 			st_matrix("item_fit_SX2",Q.get(Q.SX2_res,fit_indx))
-			st_matrixcolstripe("item_fit_SX2", (J(4,1,""),("SX2","p-val","df","n_par")'))
+			// st_matrixcolstripe("item_fit_SX2", (J(4,1,""),("SX2","p-val","df","n_par")'))
+			st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par","SX2_wp","p-val_wp","df_wp","SX2_wnpq","p-val_wnpq","df_wnpq")'))
 			st_matrixrowstripe("item_fit_SX2", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
 			
 		}
@@ -6293,24 +6294,31 @@ mata:
 			collapse_cats_results=sx2_collapse_cats(Eik_i,dEik_i,Sk_all_i,sx2_control, sum(*point_Fg[1]))
 			Eik=*collapse_cats_results[1]
 			score_range=*collapse_cats_results[2]
-			dEik=*collapse_cats_results[7]
+			exp_NPQ=*collapse_cats_results[6]
+			dEik_w_p=*collapse_cats_results[7]
+			dEik_w_npq=*collapse_cats_results[8]
 			
 			v_i_range = select((1::rows(V)), V_rownames[.,1]:== Q.get(Q.names,item_indx[i])) // we are assuming par order is fixed (as for now - it is)
-			v_i = V[v_i_range,v_i_range']
-			cov_SX2 = I(rows(dEik)) - dEik*v_i*dEik' // TLD - return it somewhere :)
+			v_i = V[v_i_range,v_i_range'] // TDL - work out the 1plm case (the issue with common a estimated as sd, and error transfered to the 1st item)
+			cov_SX2_w_p = I(rows(dEik_w_p)) - dEik_w_p*v_i*dEik_w_p' 
+			cov_SX2_w_npq = I(rows(dEik_w_npq)) - dEik_w_npq*v_i*dEik_w_npq' 
 			
 			n_est_par	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
 
-			SX2_item_results	=	sx2_orlando_thissen(item_indx[i], Eik, score_range, S, n_est_par, point_Uigc, point_Fg)
+			SX2_item_results	=	sx2_orlando_thissen(item_indx[i], Eik, score_range, S, n_est_par, point_Uigc, point_Fg, cov_SX2_w_p, cov_SX2_w_npq)
 			
-			Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par) )
+			// Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par) )
+			// st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par","SX2_wp","p-val_wp","df_wp","SX2_wnpq","p-val_wnpq","df_wnpq")'))
+			Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par,
+			*SX2_item_results[6],*SX2_item_results[7],*SX2_item_results[8],
+			*SX2_item_results[9],*SX2_item_results[10],*SX2_item_results[11]) )
 
 		}
 			
 	}
 	
 
-	pointer sx2_orlando_thissen(real scalar item_for_fit, real matrix Eik, real matrix score_range, real matrix S, real scalar n_est_par, pointer matrix point_Uigc, pointer matrix point_Fg ){
+	pointer sx2_orlando_thissen(real scalar item_for_fit, real matrix Eik, real matrix score_range, real matrix S, real scalar n_est_par, pointer matrix point_Uigc, pointer matrix point_Fg, real matrix cov_SX2_w_p, real matrix cov_SX2_w_npq ){
 	
 		obs_i=J(rows(*point_Fg[1]),1,0)
 		ord_ic = (*(*point_Uigc[item_for_fit,1])[2])
@@ -6320,26 +6328,43 @@ mata:
 		
 		Oik=J(rows(Eik),1,0)
 		Nik=J(rows(Eik),1,0)
+		Rik=J(rows(Eik),1,0)
 		for(i=1;i<=rows(Eik);i++){
 			sel_i=select((1::rows(obs_i)), (S:>=score_range[i,1] ):* (S:<=score_range[i,2] ))
 			if(rows(sel_i)){
 				Nik[i]=sum((*point_Fg[1])[sel_i])
-				Oik[i]=cross( (*point_Fg[1])[sel_i] , obs_i[sel_i])/ Nik[i]
+				Oik[i]=cross( (*point_Fg[1])[sel_i] , obs_i[sel_i])
+				Rik[i]=(Oik[i]-Nik[i]*Eik[i])/sqrt(Nik[i]*Eik[i]*(1-Eik[i])) // we defined O and E on the observed count scale, but it is the same
 			}
 		}
 		
-		SX2=sum(( Nik:*(Oik:-Eik):*(Oik:-Eik)):/(Eik:*(1:-Eik)))
-		
+		SX2= cross(Rik,Rik) //previous, using proportions: SX2=sum(( Nik:*(Oik:-Eik):*(Oik:-Eik)):/(Eik:*(1:-Eik)))
 		df=rows(Eik)-n_est_par
-		
 		pvalue=(1:-chi2(df,SX2))
+				
+		SX2_W_w_p= Rik'*cov_SX2_w_p*Rik
+		df_W_w_p = trace(cov_SX2_w_p)
+		pvalue_W_w_p=(1:-chi2(df_W_w_p,SX2_W_w_p))
 		
-		results=J(5,1,NULL)
+		SX2_W_w_npq= Rik'*cov_SX2_w_npq*Rik
+		df_W_w_npq = trace(cov_SX2_w_npq)
+		pvalue_W_w_npq =(1:-chi2(df_W_w_npq,SX2_W_w_npq))		
+
+		
+		results=J(11,1,NULL)
 		results[1]=return_pointer(SX2)
 		results[2]=return_pointer(pvalue)
 		results[3]=return_pointer(df)
 		results[4]=return_pointer(Oik)
 		results[5]=return_pointer(Nik)
+		
+		results[6]=return_pointer(SX2_W_w_p)
+		results[7]=return_pointer(pvalue_W_w_p)
+		results[8]=return_pointer(df_W_w_p)
+		
+		results[9]=return_pointer(SX2_W_w_npq)
+		results[10]=return_pointer(pvalue_W_w_npq)
+		results[11]=return_pointer(df_W_w_npq)
 		
 		return(results)
 	
@@ -6353,6 +6378,7 @@ mata:
 	
 		Eik=Eik_in
 		dEik = dEik_in
+		dEik_w_npq = dEik_in
 		Sk_all=Sk_all_in
 		N=N_obs
 		
@@ -6371,33 +6397,42 @@ mata:
 					if(rows(score_range)>2){
 						if(i==1){
 							w = Sk_all[i::i+1]
+							w_npq = exp_NPQ[i::i+1]
 							Eik = (Eik[i::i+1]'*w)/sum(w) \ Eik[i+2::n_sc]
 							dEik = (w[1]*dEik[i,.] :+ w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
+							dEik_w_npq = (w_npq[1]*dEik_w_npq[i,.] :+ w_npq[2]*dEik_w_npq[i+1,.]) / sum(w_npq) \ dEik_w_npq[i+2::n_sc,.]
 							Sk_all = sum(w) \ Sk_all[i+2::n_sc]
 							score_range = (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
 						}
 						if(i>1 & i<=n_sc-2){
 							w = Sk_all[i::i+1]
+							w_npq = exp_NPQ[i::i+1]
 							Eik = Eik[1::i-1] \ (Eik[i::i+1]'*w)/sum(w) \ Eik[i+2::n_sc]
 							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] :+ w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
+							dEik_w_npq = dEik_w_npq[1::i-1,.] \ (w_npq[1]*dEik_w_npq[i,.] :+ w_npq[2]*dEik_w_npq[i+1,.]) / sum(w_npq) \ dEik_w_npq[i+2::n_sc,.]
 							Sk_all = Sk_all[1::i-1] \ sum(w) \ Sk_all[i+2::n_sc]
 							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
 						}
 						if(i==n_sc-1){
 							w = Sk_all[i::i+1]
+							w_npq = exp_NPQ[i::i+1]
 							Eik = Eik[1::i-1] \ (Eik[i::i+1]'*w)/sum(w)
 							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] :+ w[2]*dEik[i+1,.]) / sum(w)
+							dEik_w_npq = dEik_w_npq[1::i-1,.] \ (w_npq[1]*dEik_w_npq[i,.] :+ w_npq[2]*dEik_w_npq[i+1,.]) / sum(w_npq)
 							Sk_all = Sk_all[1::i-1] \ sum(w)
 							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2])
 						}
 						if(i==n_sc){
 							w = Sk_all[i-1::i]
+							w_npq = exp_NPQ[i-1::i]
 							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w)
 							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] :+ w[2]*dEik[i,.]) / sum(w)
+							dEik_w_npq = dEik_w_npq[1::i-2,.] \ (w_npq[1]*dEik_w_npq[i-1,.] :+ w_npq[2]*dEik_w_npq[i,.]) / sum(w_npq)
 							Sk_all = Sk_all[1::i-2] \ sum(w)
 							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
 						}
 						exp_freq_1=N:*Sk_all:*Eik
+						exp_NPQ = exp_freq_1 :* (1 :- Eik)
 						n_sc=n_sc-1
 						i=i-1
 					}
@@ -6414,19 +6449,24 @@ mata:
 					if(rows(score_range)>2){
 						if(i==n_sc){
 							w = Sk_all[i-1::i]
+							w_npq = exp_NPQ[i-1::i]
 							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w)
 							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] :+ w[2]*dEik[i,.]) / sum(w)
+							dEik_w_npq = dEik_w_npq[1::i-2,.] \ (w_npq[1]*dEik_w_npq[i-1,.] :+ w_npq[2]*dEik_w_npq[i,.]) / sum(w_npq)
 							Sk_all = Sk_all[1::i-2] \ sum(w)
 							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
 						}
 						else{
 							w = Sk_all[i-1::i]
+							w_npq = exp_NPQ[i-1::i]
 							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w) \ Eik[i+1::n_sc]
 							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] :+ w[2]*dEik[i,.]) / sum(w) \ dEik[i+1::n_sc,.]
+							dEik_w_npq = dEik_w_npq[1::i-2,.] \ (w_npq[1]*dEik_w_npq[i-1,.] :+ w_npq[2]*dEik_w_npq[i,.]) / sum(w_npq) \ dEik_w_npq[i+1::n_sc,.]
 							Sk_all = Sk_all[1::i-2] \ sum(w) \ Sk_all[i+1::n_sc]
 							score_range= score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2]) \ score_range[i+1::n_sc,]
 						}
 						exp_freq_0=N:*Sk_all:*(1:-Eik)
+						exp_NPQ = exp_freq_1 :* Eik
 						n_sc=n_sc-1
 					}
 					else{
@@ -6437,8 +6477,6 @@ mata:
 			}
 			
 			exp_freq_1=N:*Sk_all:*Eik
-			exp_NPQ = exp_freq_1 :* (1 :- Eik)
-			
 		}
 		else{
 		
@@ -6464,8 +6502,10 @@ mata:
 			
 			        // Merge bins at best_idx and best_idx+1
 			        w = Sk_all[best_idx::best_idx+1]
+			        w_npq = exp_NPQ[best_idx::best_idx+1]
 			        Eik[best_idx] = Eik[best_idx::best_idx+1]' * w / sum(w)
 			        dEik[best_idx,.] = (w[1]*dEik[best_idx,.] :+ w[2]*dEik[best_idx+1,.]) / sum(w)
+			        dEik_w_npq[best_idx,.] = (w_npq[1]*dEik_w_npq[best_idx,.] :+ w_npq[2]*dEik_w_npq[best_idx+1,.]) / sum(w_npq) // alternative weighting of gradient
 			        Sk_all[best_idx] = sum(Sk_all[best_idx::best_idx+1])
 			        score_range[best_idx, 2] = score_range[best_idx+1, 2]
 			        exp_NPQ[best_idx] = N * Sk_all[best_idx] * Eik[best_idx] * (1 - Eik[best_idx])
@@ -6474,6 +6514,7 @@ mata:
 			        if(best_idx+2<=rows(Eik)){
 				        Eik = Eik[1::best_idx] \ Eik[(best_idx+2)::rows(Eik)]
 				        dEik = dEik[1::best_idx,.] \ dEik[(best_idx+2)::rows(dEik),.]
+				        dEik_w_npq = dEik_w_npq[1::best_idx,.] \ dEik_w_npq[(best_idx+2)::rows(dEik_w_npq),.]
 				        Sk_all = Sk_all[1::best_idx] \ Sk_all[(best_idx+2)::rows(Sk_all)]
 				        score_range = score_range[1::best_idx, .] \ score_range[(best_idx+2)::rows(score_range), .]
 				        exp_NPQ = exp_NPQ[1::best_idx] \ exp_NPQ[(best_idx+2)::rows(exp_NPQ)]
@@ -6481,6 +6522,7 @@ mata:
 					else{
 					   	Eik = Eik[1::best_idx]
 					   	dEik = dEik[1::best_idx,.]
+					   	dEik_w_npq = dEik_w_npq[1::best_idx,.]
 						Sk_all = Sk_all[1::best_idx]
 						score_range = score_range[1::best_idx, .]
 						exp_NPQ = exp_NPQ[1::best_idx]
@@ -6494,7 +6536,7 @@ mata:
 
    		
 		
-		results=J(8,1,NULL)
+		results=J(9,1,NULL)
 		results[1]=return_pointer(Eik)
 		results[2]=return_pointer(score_range)
 		results[3]=return_pointer(Sk_all)
@@ -6502,7 +6544,8 @@ mata:
 		results[5]=return_pointer(exp_freq_0)
 		results[6]=return_pointer(exp_NPQ)
 		results[7]=return_pointer(dEik)
-		results[8]=&warning
+		results[8]=return_pointer(dEik_w_npq)
+		results[9]=&warning
 		
 		return(results)
 	
@@ -6612,10 +6655,12 @@ mata:
 		N=N_obs-N_obs*(Sk_all[1]+Sk_all[rows(Sk_all)]) // ignoring extreme scores
 		sum_D_Eik = sum(D_Eik)
 		sum_dD_Eik = colsum(dD_Eik)
+		sqrt_exp_NPQ = sqrt(N :* D_Eik :* Eik :* (1 :- Eik))
 		for(i=1;i<=I-1;i++){
 			for(p = 1; p <= rows(dTi_Xk); p++){				
 				dEik[i, p] = N * ( dN_Eik[i,p] / sum_D_Eik  - N_Eik[i] * sum_dD_Eik[p]  / sum_D_Eik^2 )
 			}
+			dEik[i, .] = dEik[i, .] / sqrt_exp_NPQ[i]
 		}
 		
 		results=J(3,1,NULL)
