@@ -1,6 +1,6 @@
 *uirt_sx2.ado 
-*ver 1.0
-*2021.03.07
+*ver 2.0
+*2025.04.07
 *everythingthatcounts@gmail.com
 
 cap m: mata drop  _display_matrix_as_table()
@@ -8,14 +8,14 @@ cap m: mata drop  _display_matrix_as_table()
 capture prog drop uirt_sx2
 program define uirt_sx2, rclass
 version 10
-syntax [varlist] [, MINFreq(numlist max=1 >0)] 
+syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)] 
 	
 	if("`e(cmd)'" != "uirt"){
 		error 301
 	}
 	else{
 	
-		m: decimals=(3,4,0,0)
+		m: decimals=(3,4,0,0),(3,4,4),(3,4,4)
 		local postest="sx2(`0')"
 		
 		unab allvars: *
