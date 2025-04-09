@@ -6390,8 +6390,10 @@ mata:
 		n_sc=rows(Sk_all)
 		score_range=(1::n_sc),(1::n_sc)
 		
+		exp_freq_1=N:*Sk_all:*Eik
+		exp_NPQ = exp_freq_1 :* (1 :- Eik)
+		
 		if(sx2_fixed_K==.){
-			exp_freq_1=N:*Sk_all:*Eik
 			for(i=1;i<=n_sc;i++){
 				if(exp_freq_1[i]<sx2_min_freq){
 					if(rows(score_range)>2){
@@ -6466,7 +6468,8 @@ mata:
 							score_range= score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2]) \ score_range[i+1::n_sc,]
 						}
 						exp_freq_0=N:*Sk_all:*(1:-Eik)
-						exp_NPQ = exp_freq_1 :* Eik
+						exp_freq_1=N:*Sk_all:*Eik
+						exp_NPQ = exp_freq_1 :* (1 :- Eik)
 						n_sc=n_sc-1
 					}
 					else{
@@ -6485,9 +6488,6 @@ mata:
 		        warning = "too few score categories to collapse to sx2_fixed_K=" + strofreal(sx2_fixed_K)
 		    }
 		    else{
-
-			    exp_NPQ = N :* Sk_all :* Eik :* (1 :- Eik)
-			
 			    // greedy merging to reach sx2_fixed_K bins
 			    while (rows(Eik) > sx2_fixed_K) {	
 			    	best_loss = .
