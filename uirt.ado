@@ -2061,7 +2061,14 @@ mata:
 			
 			st_matrix("item_fit_SX2",Q.get(Q.SX2_res,fit_indx))
 			// st_matrixcolstripe("item_fit_SX2", (J(4,1,""),("SX2","p-val","df","n_par")'))
-			st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par","SX2_wp","p-val_wp","df_wp","SX2_wnpq","p-val_wnpq","df_wnpq")'))
+			// below are temporary names for research, if last columns are missing they are not returned from Q.get, so a workaround for fixed output
+			_temp_colnames = (J(9,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","p-val_SX_df_W","p-val_SX_W_df")')
+			_res_n_cols = cols(st_matrix("item_fit_SX2"))
+			_res_n_rows = rows(st_matrix("item_fit_SX2"))
+			if( _res_n_cols != rows(_temp_colnames) ){
+				st_matrix( "item_fit_SX2", ( st_matrix("item_fit_SX2"),J(_res_n_rows, rows(_temp_colnames)-_res_n_cols, .) ))
+			}
+			st_matrixcolstripe("item_fit_SX2",_temp_colnames )
 			st_matrixrowstripe("item_fit_SX2", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
 			
 		}
@@ -6297,33 +6304,29 @@ mata:
 			score_range=*collapse_cats_results[2]
 			Nik_obs_i = *collapse_cats_results[3]
 			exp_NPQ=*collapse_cats_results[6]
-			dEik_w_p=*collapse_cats_results[7]
-			dEik_w_npq=*collapse_cats_results[8]
+			dEik_i=*collapse_cats_results[7]
 			
-			dEik_w_p = sqrt(Nik_obs_i) :* dEik_w_p
-			dEik_w_npq = sqrt(Nik_obs_i) :* dEik_w_npq
+			dEik_i = sqrt(Nik_obs_i) :* dEik_i
 			
 			v_i_range = select((1::rows(V)), V_rownames[.,1]:== Q.get(Q.names,item_indx[i])) // we are assuming par order is fixed (as for now - it is)
 			v_i = V[v_i_range,v_i_range'] // TDL - work out the 1plm case (the issue with common a estimated as sd, and error transfered to the 1st item)
-			cov_SX2_w_p = I(rows(dEik_w_p)) - dEik_w_p*v_i*dEik_w_p' 
-			cov_SX2_w_npq = I(rows(dEik_w_npq)) - dEik_w_npq*v_i*dEik_w_npq' 
+			cov_SX2_i = I(rows(dEik_i)) - dEik_i*v_i*dEik_i' 
 			
 			n_est_par	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
 
-			SX2_item_results	=	sx2_orlando_thissen(item_indx[i], Eik_i, Nik_obs_i, score_range, S, n_est_par, point_Uigc, point_Fg, cov_SX2_w_p, cov_SX2_w_npq)
+			SX2_item_results	=	sx2_orlando_thissen(item_indx[i], Eik_i, Nik_obs_i, score_range, S, n_est_par, point_Uigc, point_Fg, cov_SX2_i)
 			
 			// Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par) )
-			// st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par","SX2_wp","p-val_wp","df_wp","SX2_wnpq","p-val_wnpq","df_wnpq")'))
+			// st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","p-val_SX_df_W","p-val_SX_W_df")'))
 			Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par,
 			*SX2_item_results[6],*SX2_item_results[7],*SX2_item_results[8],
-			*SX2_item_results[9],*SX2_item_results[10],*SX2_item_results[11]) )
-
+			*SX2_item_results[9],*SX2_item_results[10]) )
 		}
 			
 	}
 	
 
-	pointer sx2_orlando_thissen(real scalar item_for_fit, real matrix Eik, real matrix Nik, real matrix score_range, real matrix S, real scalar n_est_par, pointer matrix point_Uigc, pointer matrix point_Fg, real matrix cov_SX2_w_p, real matrix cov_SX2_w_npq ){
+	pointer sx2_orlando_thissen(real scalar item_for_fit, real matrix Eik, real matrix Nik, real matrix score_range, real matrix S, real scalar n_est_par, pointer matrix point_Uigc, pointer matrix point_Fg, real matrix cov_SX2){
 	
 		obs_i=J(rows(*point_Fg[1]),1,0)
 		ord_ic = (*(*point_Uigc[item_for_fit,1])[2])
@@ -6345,13 +6348,12 @@ mata:
 		df=rows(Eik)-n_est_par
 		pvalue=(1:-chi2(df,SX2))
 				
-		SX2_W_w_p= Rik'*cov_SX2_w_p*Rik
-		df_W_w_p = trace(cov_SX2_w_p)
-		pvalue_W_w_p=(1:-chi2(df_W_w_p,SX2_W_w_p))
+		SX2_W= Rik'*cov_SX2*Rik
+		df_W = trace(cov_SX2)
+		pvalue_W=( 1:-chi2(df_W,SX2_W))
 		
-		SX2_W_w_npq= Rik'*cov_SX2_w_npq*Rik
-		df_W_w_npq = trace(cov_SX2_w_npq)
-		pvalue_W_w_npq =(1:-chi2(df_W_w_npq,SX2_W_w_npq))		
+		pvalue_SX_df_W = (1:-chi2(df_W,SX2))
+		pvalue_SX_W_df = (1:-chi2(df,SX2_W))
 
 		
 		results=J(11,1,NULL)
@@ -6361,13 +6363,12 @@ mata:
 		results[4]=return_pointer(Oik)
 		results[5]=return_pointer(Nik)
 		
-		results[6]=return_pointer(SX2_W_w_p)
-		results[7]=return_pointer(pvalue_W_w_p)
-		results[8]=return_pointer(df_W_w_p)
+		results[6]=return_pointer(SX2_W)
+		results[7]=return_pointer(pvalue_W)
+		results[8]=return_pointer(df_W)
 		
-		results[9]=return_pointer(SX2_W_w_npq)
-		results[10]=return_pointer(pvalue_W_w_npq)
-		results[11]=return_pointer(df_W_w_npq)
+		results[9]=return_pointer(pvalue_SX_df_W)
+		results[10]=return_pointer(pvalue_SX_W_df)
 		
 		return(results)
 	
@@ -6375,167 +6376,77 @@ mata:
 	
 	
 	pointer sx2_collapse_cats(real matrix Eik_in, real matrix dEik_in, real matrix Nik_obs_in, real matrix sx2_control){
-	
+
 		sx2_min_freq = sx2_control[1]
-	 	sx2_fixed_K = sx2_control[2]
-	
+		sx2_fixed_K = sx2_control[2]
+
 		Eik=Eik_in
-		dEik = dEik_in // weighted by probability
-		dEik_w_npq = dEik_in // weighted by npg
+		dEik = dEik_in
 		Nik_obs=Nik_obs_in
 		
 		warning=""
-		
 		n_sc=rows(Nik_obs)
 		score_range=(1::n_sc),(1::n_sc)
-		
+
 		exp_freq_1=Nik_obs:*Eik
+		exp_freq_0=Nik_obs:*(1:-Eik)
 		exp_NPQ = exp_freq_1 :* (1 :- Eik)
-		
-		if(sx2_fixed_K==.){
-			for(i=1;i<=n_sc;i++){
-				if(exp_freq_1[i]<sx2_min_freq){
-					if(rows(score_range)>2){
-						if(i==1){
-							w = Nik_obs[i::i+1]
-							w_npq = exp_NPQ[i::i+1]
-							Eik = (Eik[i::i+1]'*w)/sum(w) \ Eik[i+2::n_sc]
-							dEik = (w[1]*dEik[i,.] :+ w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
-							dEik_w_npq = (w_npq[1]*dEik_w_npq[i,.] :+ w_npq[2]*dEik_w_npq[i+1,.]) / sum(w_npq) \ dEik_w_npq[i+2::n_sc,.]
-							Nik_obs = sum(w) \ Nik_obs[i+2::n_sc]
-							score_range = (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
-						}
-						if(i>1 & i<=n_sc-2){
-							w = Nik_obs[i::i+1]
-							w_npq = exp_NPQ[i::i+1]
-							Eik = Eik[1::i-1] \ (Eik[i::i+1]'*w)/sum(w) \ Eik[i+2::n_sc]
-							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] :+ w[2]*dEik[i+1,.]) / sum(w) \ dEik[i+2::n_sc,.]
-							dEik_w_npq = dEik_w_npq[1::i-1,.] \ (w_npq[1]*dEik_w_npq[i,.] :+ w_npq[2]*dEik_w_npq[i+1,.]) / sum(w_npq) \ dEik_w_npq[i+2::n_sc,.]
-							Nik_obs = Nik_obs[1::i-1] \ sum(w) \Nik_obs[i+2::n_sc]
-							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2]) \ score_range[i+2::n_sc,]
-						}
-						if(i==n_sc-1){
-							w = Nik_obs[i::i+1]
-							w_npq = exp_NPQ[i::i+1]
-							Eik = Eik[1::i-1] \ (Eik[i::i+1]'*w)/sum(w)
-							dEik = dEik[1::i-1,.] \ (w[1]*dEik[i,.] :+ w[2]*dEik[i+1,.]) / sum(w)
-							dEik_w_npq = dEik_w_npq[1::i-1,.] \ (w_npq[1]*dEik_w_npq[i,.] :+ w_npq[2]*dEik_w_npq[i+1,.]) / sum(w_npq)
-							Nik_obs = Nik_obs[1::i-1] \ sum(w)
-							score_range = score_range[1::i-1,] \ (score_range[i,1],score_range[i+1,2])
-						}
-						if(i==n_sc){
-							w = Nik_obs[i-1::i]
-							w_npq = exp_NPQ[i-1::i]
-							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w)
-							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] :+ w[2]*dEik[i,.]) / sum(w)
-							dEik_w_npq = dEik_w_npq[1::i-2,.] \ (w_npq[1]*dEik_w_npq[i-1,.] :+ w_npq[2]*dEik_w_npq[i,.]) / sum(w_npq)
-							Nik_obs = Nik_obs[1::i-2] \ sum(w)
-							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
-						}
-						exp_freq_1=Nik_obs:*Eik
-						exp_NPQ = exp_freq_1 :* (1 :- Eik)
-						n_sc=n_sc-1
-						i=i-1
-					}
-					else{
-						warning="could not collapse cats with sx2_min_freq="+strofreal(sx2_min_freq)
-					}
-				}
+
+		while (rows(Eik) > 1 & ((sx2_fixed_K==. & min((exp_freq_1 :< exp_freq_0) :* exp_freq_1 :+ (exp_freq_0 :<= exp_freq_1) :* exp_freq_0) < sx2_min_freq) |
+			   (sx2_fixed_K!=. & rows(Eik) > sx2_fixed_K))) {
+
+			if (sx2_fixed_K == .) {
+				which = (exp_freq_1 :< exp_freq_0)
+				criterion = which :* exp_freq_1 :+ (1 :- which) :* exp_freq_0
+			} else {
+				criterion = exp_NPQ
 			}
-			
+
+			minval = min(criterion)
+			for (i=1; i<=rows(criterion); i++) {
+				if (criterion[i]==minval) break
+			}
+
+			if (i==1) {
+				j = 2
+			} else if (i==rows(Eik)) {
+				j = rows(Eik)-1
+			} else {
+				j = (criterion[i-1] < criterion[i+1] ? i-1 : i+1)
+			}
+
+			idx = (i<j ? i : j)
+			w = Nik_obs[idx::idx+1]
+			Eik[idx] = (Eik[idx::idx+1]'*w)/sum(w)
+			dEik[idx,.] = (w[1]*dEik[idx,.] + w[2]*dEik[idx+1,.]) / sum(w)
+			Nik_obs[idx] = sum(w)
+			score_range[idx,2] = score_range[idx+1,2]
+
+			if (idx+2<=rows(Eik)) {
+				Eik = Eik[1::idx] \ Eik[(idx+2)::rows(Eik)]
+				dEik = dEik[1::idx,.] \ dEik[(idx+2)::rows(dEik),.]
+				Nik_obs = Nik_obs[1::idx] \ Nik_obs[(idx+2)::rows(Nik_obs)]
+				score_range = score_range[1::idx, .] \ score_range[(idx+2)::rows(score_range), .]
+			} else {
+				Eik = Eik[1::idx]
+				dEik = dEik[1::idx,.]
+				Nik_obs = Nik_obs[1::idx]
+				score_range = score_range[1::idx, .]
+			}
+
+			exp_freq_1=Nik_obs:*Eik
 			exp_freq_0=Nik_obs:*(1:-Eik)
-			i=n_sc
-			while(n_sc>1 & i>2){
-				if(exp_freq_0[i]<sx2_min_freq){
-					if(rows(score_range)>2){
-						if(i==n_sc){
-							w = Nik_obs[i-1::i]
-							w_npq = exp_NPQ[i-1::i]
-							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w)
-							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] :+ w[2]*dEik[i,.]) / sum(w)
-							dEik_w_npq = dEik_w_npq[1::i-2,.] \ (w_npq[1]*dEik_w_npq[i-1,.] :+ w_npq[2]*dEik_w_npq[i,.]) / sum(w_npq)
-							Nik_obs = Nik_obs[1::i-2] \ sum(w)
-							score_range = score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2])
-						}
-						else{
-							w = Nik_obs[i-1::i]
-							w_npq = exp_NPQ[i-1::i]
-							Eik = Eik[1::i-2] \ (Eik[i-1::i]'*w)/sum(w) \ Eik[i+1::n_sc]
-							dEik = dEik[1::i-2,.] \ (w[1]*dEik[i-1,.] :+ w[2]*dEik[i,.]) / sum(w) \ dEik[i+1::n_sc,.]
-							dEik_w_npq = dEik_w_npq[1::i-2,.] \ (w_npq[1]*dEik_w_npq[i-1,.] :+ w_npq[2]*dEik_w_npq[i,.]) / sum(w_npq) \ dEik_w_npq[i+1::n_sc,.]
-							Nik_obs = Nik_obs[1::i-2] \ sum(w) \ Nik_obs[i+1::n_sc]
-							score_range= score_range[1::i-2,] \ (score_range[i-1,1],score_range[i,2]) \ score_range[i+1::n_sc,]
-						}
-						exp_freq_0=Nik_obs:*(1:-Eik)
-						exp_freq_1=Nik_obs:*Eik
-						exp_NPQ = exp_freq_1 :* (1 :- Eik)
-						n_sc=n_sc-1
-					}
-					else{
-						warning="could not collapse cats with sx2_min_freq="+strofreal(sx2_min_freq)
-					}
-				}
-				i=i-1
-			}
-			
-//			exp_freq_1=Nik_obs:*Eik - delete, already updated in any scenario
-		}
-		else{
-		
-		    // Edge case: not enough score levels, but it should already be sorted out by sx2_check()
-		    if (rows(Eik) <= sx2_fixed_K) {
-		        warning = "too few score categories to collapse to sx2_fixed_K=" + strofreal(sx2_fixed_K)
-		    }
-		    else{
-			    // greedy merging to reach sx2_fixed_K bins
-			    while (rows(Eik) > sx2_fixed_K) {	
-			    	best_loss = .
-			        for (i = 1; i < rows(Eik); i++) {
-			            avg = ( sum(exp_NPQ) / (rows(Eik)-1) ) // alternatively, we could target sx2_fixed_K from the get go..
-			            loss = abs(sum(exp_NPQ[i::i+1]) - avg)
-			            if (loss < best_loss) {
-			                best_loss = loss
-			                best_idx = i
-			            }
-			        }
-			
-			        // Merge bins at best_idx and best_idx+1
-			        w = Nik_obs[best_idx::best_idx+1]
-			        w_npq = exp_NPQ[best_idx::best_idx+1]
-			        Eik[best_idx] = Eik[best_idx::best_idx+1]' * w / sum(w)
-			        dEik[best_idx,.] = (w[1]*dEik[best_idx,.] :+ w[2]*dEik[best_idx+1,.]) / sum(w)
-			        dEik_w_npq[best_idx,.] = (w_npq[1]*dEik_w_npq[best_idx,.] :+ w_npq[2]*dEik_w_npq[best_idx+1,.]) / sum(w_npq) // alternative weighting of gradient
-			        Nik_obs[best_idx] = sum(w)
-			        score_range[best_idx, 2] = score_range[best_idx+1, 2]
-			        exp_NPQ[best_idx] = Nik_obs[best_idx] * Eik[best_idx] * (1 - Eik[best_idx])
-			
-			        // Remove merged row
-			        if(best_idx+2<=rows(Eik)){
-				        Eik = Eik[1::best_idx] \ Eik[(best_idx+2)::rows(Eik)]
-				        dEik = dEik[1::best_idx,.] \ dEik[(best_idx+2)::rows(dEik),.]
-				        dEik_w_npq = dEik_w_npq[1::best_idx,.] \ dEik_w_npq[(best_idx+2)::rows(dEik_w_npq),.]
-				        Nik_obs = Nik_obs[1::best_idx] \ Nik_obs[(best_idx+2)::rows(Nik_obs)]
-				        score_range = score_range[1::best_idx, .] \ score_range[(best_idx+2)::rows(score_range), .]
-				        exp_NPQ = exp_NPQ[1::best_idx] \ exp_NPQ[(best_idx+2)::rows(exp_NPQ)]
-					}
-					else{
-					   	Eik = Eik[1::best_idx]
-					   	dEik = dEik[1::best_idx,.]
-					   	dEik_w_npq = dEik_w_npq[1::best_idx,.]
-						Nik_obs = Nik_obs[1::best_idx]
-						score_range = score_range[1::best_idx, .]
-						exp_NPQ = exp_NPQ[1::best_idx]
-					}
-			    }
-			}
-		    
-			exp_freq_0=Nik_obs:*(1:-Eik) 
-			exp_freq_1=Nik_obs:*Eik 
+			exp_NPQ = exp_freq_1 :* (1 :- Eik)
 		}
 
-   		
-		
-		results=J(9,1,NULL)
+		if (sx2_fixed_K == . & rows(Eik) <= 1) {
+			warning = "we collapsed to a single bin with sx2_min_freq=" + strofreal(sx2_min_freq)
+		}
+		if (sx2_fixed_K != . & rows(Eik) > sx2_fixed_K) {
+			warning = "too few score categories to collapse to sx2_fixed_K=" + strofreal(sx2_fixed_K)
+		}
+
+		results=J(8,1,NULL)
 		results[1]=return_pointer(Eik)
 		results[2]=return_pointer(score_range)
 		results[3]=return_pointer(Nik_obs)
@@ -6543,12 +6454,10 @@ mata:
 		results[5]=return_pointer(exp_freq_0)
 		results[6]=return_pointer(exp_NPQ)
 		results[7]=return_pointer(dEik)
-		results[8]=return_pointer(dEik_w_npq)
-		results[9]=&warning
-		
+		results[8]=&warning
 		return(results)
-	
 	}
+
 	
 		
 	pointer sx2_lord_wingersky(_Q, _Gx, real scalar item_for_fit){
