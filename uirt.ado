@@ -2062,7 +2062,8 @@ mata:
 			st_matrix("item_fit_SX2",Q.get(Q.SX2_res,fit_indx))
 			// st_matrixcolstripe("item_fit_SX2", (J(4,1,""),("SX2","p-val","df","n_par")'))
 			// below are temporary names for research, if last columns are missing they are not returned from Q.get, so a workaround for fixed output
-			_temp_colnames = (J(9,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","p-val_SX_df_W","p-val_SX_W_df")')
+			// _temp_colnames = (J(9,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","p-val_SX_df_W","p-val_SX_W_df")')
+			_temp_colnames = (J(10,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","p-val_SX_df_W","p-val_SX_W_df","min_np_nq")')
 			_res_n_cols = cols(st_matrix("item_fit_SX2"))
 			_res_n_rows = rows(st_matrix("item_fit_SX2"))
 			if( _res_n_cols != rows(_temp_colnames) ){
@@ -6305,6 +6306,7 @@ mata:
 			Nik_obs_i = *collapse_cats_results[3]
 			exp_NPQ=*collapse_cats_results[6]
 			dEik_i=*collapse_cats_results[7]
+			min_np_nq = min (	( *collapse_cats_results[4] , *collapse_cats_results[5] ) )
 			
 			dEik_i = sqrt(Nik_obs_i) :* dEik_i
 			
@@ -6320,7 +6322,7 @@ mata:
 			// st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","p-val_SX_df_W","p-val_SX_W_df")'))
 			Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par,
 			*SX2_item_results[6],*SX2_item_results[7],*SX2_item_results[8],
-			*SX2_item_results[9],*SX2_item_results[10]) )
+			*SX2_item_results[9],*SX2_item_results[10], min_np_nq) )
 		}
 			
 	}
@@ -6395,12 +6397,13 @@ mata:
 		while (rows(Eik) > 1 & ((sx2_fixed_K==. & min((exp_freq_1 :< exp_freq_0) :* exp_freq_1 :+ (exp_freq_0 :<= exp_freq_1) :* exp_freq_0) < sx2_min_freq) |
 			   (sx2_fixed_K!=. & rows(Eik) > sx2_fixed_K))) {
 
-			if (sx2_fixed_K == .) {
+// we will test out the same collapsing ciretion for fixed K as well
+//			if (sx2_fixed_K == .) {
 				which = (exp_freq_1 :< exp_freq_0)
 				criterion = which :* exp_freq_1 :+ (1 :- which) :* exp_freq_0
-			} else {
-				criterion = exp_NPQ
-			}
+//			} else {
+//				criterion = exp_NPQ
+//			}
 
 			minval = min(criterion)
 			for (i=1; i<=rows(criterion); i++) {

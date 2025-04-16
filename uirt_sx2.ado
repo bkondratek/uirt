@@ -15,7 +15,7 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 	}
 	else{
 	
-		m: decimals=(3,4,0,0),(3,4,4),(4,4)
+		m: decimals=(3,4,0,0),(3,4,4),(4,4,4)
 		local postest="sx2(`0')"
 		
 		unab allvars: *
