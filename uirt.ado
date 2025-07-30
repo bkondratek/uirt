@@ -1870,7 +1870,7 @@ mata:
 			// this option is not documented, used to speed up postestimation
 			if(errors=="stored"){
 				V						= stored_V
-				se=sqrt(rowsum(diag(V)))
+				se                      = sqrt(diagonal(V))
 				Q.put(Q.se,.,uncreate_long_vector(Q, G, se,0))
 				G.put(G.se,.,uncreate_long_vector(Q, G, se,1))
 				
@@ -2452,7 +2452,7 @@ mata:
 			
 		}
 				
-		se=sqrt(rowsum(diag(V)))
+		se=sqrt(diagonal(V))
 		Q.put(Q.se,.,uncreate_long_vector(Q, G, se,0))
 		G.put(G.se,.,uncreate_long_vector(Q, G, se,1))
 		
@@ -2696,7 +2696,7 @@ mata:
 			
 		}
 		
-		se=sqrt(rowsum(diag(V)))
+		se=sqrt(diagonal(V))
 		Q.put(Q.se,.,uncreate_long_vector(Q, G, se,0))
 		G.put(G.se,.,uncreate_long_vector(Q, G, se,1))
 		
