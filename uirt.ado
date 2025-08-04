@@ -5210,7 +5210,9 @@ mata:
 		N_gr	= G.n
 		I		= Q.n
 
-		//and, unfortunatelly, now we have to uncontract the point_Uigc
+		if_not_pvreg_yet=1 // indicate one-time job in case pvreg is used
+
+		//and, unfortunately, now we have to uncontract the point_Uigc
 		point_Uigc_dup			= J(I,N_gr,NULL)
 		total_obs_rangestart	= 1
 		group_previousuniqueobs	= 0
@@ -5243,7 +5245,7 @@ mata:
 		PV = J(sum(G.get(G.n_total,.)),pv,.)
 		
 		long_final_estimates			= create_long_vector(Q,G,"pars")
-		estim_range						= select((1::rows(long_final_estimates)),rowsum(V):!=0)
+		estim_range						= select((1::rows(long_final_estimates)),diagonal(V):!=0)
 		long_final_estimates_perturbed  = long_final_estimates
 
 		count_pv=0
@@ -5350,58 +5352,120 @@ mata:
 					current_pv_index		= st_addvar("double",current_pv_name)
 					st_store(Theta_id,current_pv_index,theta_tt)
 
-	//xtmixed in Stata 10 does not handle factor notation
+	                //xtmixed in Stata 10 does not handle factor notation
 					if(stataversion()>=1200){
 						statasetversion(stataversion())
 					}
-					stata("qui xtmixed "+current_pv_name+" "+pvreg+",iter(50)")
-					k_random_effects		= st_numscalar("e(k_r)")
-					
-					current_prior_name		= st_tempname()
-					stata("qui predict "+current_prior_name+",fit")
-					current_prior_E			= st_data(Theta_id,current_prior_name)
-	//				without error of estimation of predictions we would have simply				
-	//				prior_mean				= current_prior_E
-					stata("qui predict "+current_prior_name+"e0,stdp")
-					current_prior_S			= st_data(Theta_id,current_prior_name+"e0")
-					if(k_random_effects>1){
-						current_prior_S		= current_prior_S:*current_prior_S
-						stata("qui predict "+current_prior_name+"e*,reses")
-						for(k=1;k<=k_random_effects-1;k++){
-							current_prior_S	= current_prior_S :+ st_data(Theta_id,current_prior_name+"e"+strofreal(k)):* st_data(Theta_id,current_prior_name+"e"+strofreal(k))
-						}
-						current_prior_S		= sqrt(current_prior_S)
-					}
-					
-					statasetversion(1000) // resetting to Stata 1000
-					
-					prior_ES=(current_prior_E, current_prior_S )
-					prior_ES_unique=uniqrows(prior_ES)
-					for(p=1;p<=rows(prior_ES_unique);p++){
-						if(prior_ES_unique[p,1]!=.){
-							E_perturbed = rnormal(1,1,prior_ES_unique[p,1],prior_ES_unique[p,2])
-							prior_sel	= select( (1::rows(prior_ES)),rowsum(prior_ES:==prior_ES_unique[p,.]):==2)
-							prior_mean[prior_sel] = J(rows(prior_sel),1,E_perturbed)
-						}
-					}
-					
-					residuals = theta_tt-prior_mean
-										
-					stata("qui drop " + current_prior_name+"*")
-					
-					stata("qui drop " + current_pv_name)
-					
-					//computing prior_sd from residuals and rescaling the priors to sync with DIST_perturbed
-					for(g=1;g<=N_gr;g++){
-					
-						mean_prior_mean=mean(prior_mean[*point_uncontracted_group_range[g]])
-						variance_prior_mean=variance(prior_mean[*point_uncontracted_group_range[g]])
-						mean_prior_sd = sqrt(variance(residuals[*point_uncontracted_group_range[g]]))
-						rescaling_factor=((Gx.get(Gx.pars,g)[2]^2)/(mean_prior_sd^2+variance_prior_mean))
-						prior_mean[*point_uncontracted_group_range[g]]	= (prior_mean[*point_uncontracted_group_range[g]] :- mean_prior_mean):*rescaling_factor :+ Gx.get(Gx.pars,g)[1]
-						prior_sd[*point_uncontracted_group_range[g]] = J(Gx.get(Gx.n_total,g),1, mean_prior_sd * rescaling_factor )
 
+					stata("qui xtmixed "+current_pv_name+" "+pvreg+",iter(50)")
+
+					k_random_effects		= st_numscalar("e(k_r)")
+
+					current_prior_name= st_tempname()
+					stata("qui predict "+current_prior_name+"_yhat0,xb") // xb, linear prediction
+					stata("qui predict "+current_prior_name+"_se0,stdp") // se_xb
+					if(k_random_effects>1){
+						stata("qui predict "+current_prior_name+"_yhat*,reff") // blups
+						stata("qui predict "+current_prior_name+"_se*,reses")  // se_blubs
 					}
+
+					point_yhat_se = J(k_random_effects,2,NULL) // single level => 1 random effect for residuals
+					for(k=0;k<=k_random_effects-1;k++){
+						_yhat = st_data(Theta_id,current_prior_name+"_yhat"+strofreal(k))
+						_se = st_data(Theta_id,current_prior_name+"_se"+strofreal(k))
+						if(if_not_pvreg_yet & k==0){
+							stata("qui egen "+current_prior_name+"_missing=rowmiss("+current_prior_name+"_yhat*)")
+							miss_count_vec = st_data(Theta_id,current_prior_name+"_missing")
+							nonmiss_pred_ids = select((1::rows(miss_count_vec)),miss_count_vec:==0)
+							point_group_nonmiss_pred_ids = J(N_gr,1,NULL)
+							group_previousobs= 0
+							for(g=1;g<=N_gr;g++){
+								gr_miss_count_vec=st_data(Theta_id[*point_uncontracted_group_range[g]],current_prior_name+"_missing")
+								group_currentobs=sum(gr_miss_count_vec:==0)
+								point_group_nonmiss_pred_ids[g] = return_pointer( (1::group_currentobs) :+ group_previousobs )
+								group_previousobs= group_previousobs+group_currentobs
+							}
+
+						}
+						point_yhat_se[k+1,1] = return_pointer(_yhat[nonmiss_pred_ids])
+						point_yhat_se[k+1,2] = return_pointer(_se[nonmiss_pred_ids])
+					}
+
+
+					if(if_not_pvreg_yet){
+
+						point_uniq_design_ids = J(k_random_effects,1,NULL)
+						point_all_design_ids = J(k_random_effects,1,NULL)
+
+						for(k=0;k<=k_random_effects-1;k++){
+							_yhatse = (*point_yhat_se[k+1,1],*point_yhat_se[k+1,2])
+							_yhatse_unique = uniqrows(_yhatse)
+
+							_x_all_id = J(rows(_yhatse),1,.)
+							_x_unique_id = J(rows(_yhatse_unique),1,.)
+							for(p=1; p<=rows(_yhatse_unique); p++){
+								ids_sel = select( (1::rows(_yhatse)),rowsum(_yhatse:==_yhatse_unique[p,.]):==2)
+								_x_unique_id[p] = ids_sel[1]
+								_x_all_id[ids_sel] = J(rows(ids_sel),1,p)
+							}
+
+							point_uniq_design_ids[k+1] = return_pointer(_x_unique_id[.])
+							point_all_design_ids[k+1] = return_pointer(_x_all_id[.])
+						}
+
+						if_not_pvreg_yet=0
+					}
+
+					_prior_E = J(rows(nonmiss_pred_ids),1,0)
+					_prior_V = _prior_E
+					for(k=0;k<=k_random_effects-1;k++){
+
+						_yhat_unique 	= (*point_yhat_se[k+1,1])[*point_uniq_design_ids[k+1]]
+						_se_unique 	= (*point_yhat_se[k+1,2])[*point_uniq_design_ids[k+1]]
+
+						level_prior_draw = rnormal(1,1,_yhat_unique, _se_unique)
+
+						if(rows(level_prior_draw)==1){ // empty model case, because Stata returns indexed scalar as colvector
+							_prior_E = _prior_E :+ level_prior_draw
+						}
+						else{
+							_prior_E = _prior_E :+ level_prior_draw[*point_all_design_ids[k+1]]
+						}
+						_prior_V = _prior_V :+ (*point_yhat_se[k+1,2]):^2
+					}
+
+					//rescaling _prior_V and group centering _prior_E
+					for(g=1;g<=N_gr;g++){
+
+						g_range = *point_group_nonmiss_pred_ids[g]
+						g_mean = Gx.get(Gx.pars,g)[1]
+						g_var = Gx.get(Gx.pars,g)[2]^2
+
+						mean_prior_E = mean(_prior_E[g_range])
+						_prior_E[g_range] = _prior_E[g_range] :- mean_prior_E :+ g_mean
+
+						var_prior_E = variance(_prior_E[g_range])
+						mean_prior_V = mean(_prior_V[g_range])
+
+						// _prior_V[g_range] =  (g_var - (var_prior_E+ mean_prior_V))  :* (_prior_V[g_range]:/mean_prior_V) // <-- pred specific weights, unstable
+						_prior_V[g_range] =  J(rows(g_range),1, g_var - (var_prior_E+ mean_prior_V))
+					}
+					prior_mean[nonmiss_pred_ids] = _prior_E
+					prior_sd[nonmiss_pred_ids] = sqrt(_prior_V)
+
+					stata("qui drop " + current_prior_name+"*")
+					statasetversion(1000) // resetting to Stata 1000
+
+					//OLD rescaling
+					//residuals = theta_tt-prior_mean
+					//for(g=1;g<=N_gr;g++){
+					//	mean_prior_mean=mean(prior_mean[*point_uncontracted_group_range[g]])
+					//	variance_prior_mean=variance(prior_mean[*point_uncontracted_group_range[g]])
+					//	mean_prior_sd = sqrt(variance(residuals[*point_uncontracted_group_range[g]]))
+					//	rescaling_factor=((Gx.get(Gx.pars,g)[2]^2)/(mean_prior_sd^2+variance_prior_mean))
+					//	prior_mean[*point_uncontracted_group_range[g]]	= (prior_mean[*point_uncontracted_group_range[g]] :- mean_prior_mean):*rescaling_factor :+ Gx.get(Gx.pars,g)[1]
+					//	prior_sd[*point_uncontracted_group_range[g]] = J(Gx.get(Gx.n_total,g),1, mean_prior_sd * rescaling_factor )
+					//}
 
 					theta_tt = mcmc_step(Qx, theta_tt, sd_prop , prior_mean, prior_sd, point_Uigc_dup)
 					
