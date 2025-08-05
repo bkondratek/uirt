@@ -1,6 +1,6 @@
 *uirt.ado 
-*ver 2.2.1
-*2022.11.13
+*ver 2.2.2
+*2025.08.05
 *everythingthatcounts@gmail.com
 
 capture prog drop uirt
@@ -1893,8 +1893,8 @@ mata:
 		
 // ADDING PVs
 		if(pv>0){
-			// giving small burn, because we have a proposition distribution fixed at the unconditioned a posteriori
-			burn					= 40
+			// giving small burn, because: proposition distribution fixed at a posteriori + we already start with pseudo-plausible + each conditioned burn step = 5 draws
+			burn					= 10
 			draw_from_chain			= 10
 			max_independent_chains	=	100
 			if(group!="."){
@@ -5211,6 +5211,7 @@ mata:
 		I		= Q.n
 
 		if_not_pvreg_yet=1 // indicate one-time job in case pvreg is used
+		between_mixed_draws = 5 // number of draws after priors updated in conditioned pv generation
 
 		//and, unfortunately, now we have to uncontract the point_Uigc
 		point_Uigc_dup			= J(I,N_gr,NULL)
@@ -5328,6 +5329,7 @@ mata:
 					ll_theta_se = return_ll_theta_se(Qx, Gx ,1 ,195, point_Uigc, point_Fg)
 					theta_tt 	= (*ll_theta_se[2])[Theta_dup]	
 					sd_prop		= (*ll_theta_se[3])[Theta_dup]
+					theta_tt = rnormal(1,1,theta_tt,sd_prop) // unconditioned pseudo-plausible value at step_0
 					
 					prior_mean	=  J(sum(G.get(G.n_uniq,.)),1,.)
 					prior_sd 	=  prior_mean
@@ -5343,7 +5345,7 @@ mata:
 				}
 				
 				
-				if(pvreg=="." | (i+burn)>ceil(burn/2)){
+				if(pvreg=="."){
 					theta_tt = mcmc_step(Qx, theta_tt, sd_prop , prior_mean, prior_sd, point_Uigc_dup)
 				}
 				else{  // MUST be repeated several times, otherwise estimates are biased downwards!!
@@ -5413,11 +5415,19 @@ mata:
 							point_all_design_ids[k+1] = return_pointer(_x_all_id[.])
 						}
 
+						mixed_estimates = st_matrix("e(b)")
+						mixed_estimates_cols = st_matrixcolstripe("e(b)")
+						mixed_estimates_rows = (chain,i+burn)
+
 						if_not_pvreg_yet=0
+					}
+					else{ // appending mixed estimates
+						mixed_estimates = mixed_estimates \ st_matrix("e(b)")
+						mixed_estimates_rows = mixed_estimates_rows\(chain,i+burn)
 					}
 
 					_prior_E = J(rows(nonmiss_pred_ids),1,0)
-					_prior_V = _prior_E
+					//_prior_V = _prior_E  // unused and overwritten later
 					for(k=0;k<=k_random_effects-1;k++){
 
 						_yhat_unique 	= (*point_yhat_se[k+1,1])[*point_uniq_design_ids[k+1]]
@@ -5431,24 +5441,27 @@ mata:
 						else{
 							_prior_E = _prior_E :+ level_prior_draw[*point_all_design_ids[k+1]]
 						}
-						_prior_V = _prior_V :+ (*point_yhat_se[k+1,2]):^2
+						// _prior_V = _prior_V :+ (*point_yhat_se[k+1,2]):^2 // unused and overwritten later
 					}
 
-					//rescaling _prior_V and group centering _prior_E
+					//obtaining prior_mean and prior_sd on a proper scale
+					_prior_V = J(rows(nonmiss_pred_ids),1,.)
 					for(g=1;g<=N_gr;g++){
 
 						g_range = *point_group_nonmiss_pred_ids[g]
 						g_mean = Gx.get(Gx.pars,g)[1]
 						g_var = Gx.get(Gx.pars,g)[2]^2
 
-						mean_prior_E = mean(_prior_E[g_range])
-						_prior_E[g_range] = _prior_E[g_range] :- mean_prior_E :+ g_mean
+                        if(rows(g_range)){
+                            residuals_var = variance(theta_tt[g_range]-_prior_E[g_range])
+                            theta_tt_var = variance(theta_tt[g_range])
+                            rescaling_factor = sqrt(g_var/theta_tt_var) // keeps group scale in check
+                            mean_prior_E = mean(_prior_E[g_range])
 
-						var_prior_E = variance(_prior_E[g_range])
-						mean_prior_V = mean(_prior_V[g_range])
-
-						// _prior_V[g_range] =  (g_var - (var_prior_E+ mean_prior_V))  :* (_prior_V[g_range]:/mean_prior_V) // <-- pred specific weights, unstable
-						_prior_V[g_range] =  J(rows(g_range),1, g_var - (var_prior_E+ mean_prior_V))
+                            _prior_E[g_range] = (_prior_E[g_range] :- mean_prior_E):*rescaling_factor :+ g_mean
+                            _prior_V[g_range] =  J(rows(g_range),1, residuals_var * rescaling_factor )
+//                          _prior_V[g_range] =  (g_var - (var_prior_E+ mean_prior_V))  :* (_prior_V[g_range]:/mean_prior_V) // <-- pred specific weights, unstable
+						}
 					}
 					prior_mean[nonmiss_pred_ids] = _prior_E
 					prior_sd[nonmiss_pred_ids] = sqrt(_prior_V)
@@ -5456,18 +5469,10 @@ mata:
 					stata("qui drop " + current_prior_name+"*")
 					statasetversion(1000) // resetting to Stata 1000
 
-					//OLD rescaling
-					//residuals = theta_tt-prior_mean
-					//for(g=1;g<=N_gr;g++){
-					//	mean_prior_mean=mean(prior_mean[*point_uncontracted_group_range[g]])
-					//	variance_prior_mean=variance(prior_mean[*point_uncontracted_group_range[g]])
-					//	mean_prior_sd = sqrt(variance(residuals[*point_uncontracted_group_range[g]]))
-					//	rescaling_factor=((Gx.get(Gx.pars,g)[2]^2)/(mean_prior_sd^2+variance_prior_mean))
-					//	prior_mean[*point_uncontracted_group_range[g]]	= (prior_mean[*point_uncontracted_group_range[g]] :- mean_prior_mean):*rescaling_factor :+ Gx.get(Gx.pars,g)[1]
-					//	prior_sd[*point_uncontracted_group_range[g]] = J(Gx.get(Gx.n_total,g),1, mean_prior_sd * rescaling_factor )
-					//}
 
-					theta_tt = mcmc_step(Qx, theta_tt, sd_prop , prior_mean, prior_sd, point_Uigc_dup)
+                    for(draw=1; draw<=between_mixed_draws; draw++){
+					    theta_tt = mcmc_step(Qx, theta_tt, sd_prop , prior_mean, prior_sd, point_Uigc_dup)
+					}
 					
 				}
 				
@@ -5482,6 +5487,13 @@ mata:
 				}	
 			}
 		}
+
+		if(pvreg!="." & 1==1){ // used for debugging and research, consider returning in output
+			st_matrix("uirt_pvreg_b",mixed_estimates)
+			st_matrixrowstripe("uirt_pvreg_b",("chain_","i_"):+strofreal(mixed_estimates_rows))
+			st_matrixcolstripe("uirt_pvreg_b",mixed_estimates_cols)
+		}
+
 		return(PV)
 	}
 
