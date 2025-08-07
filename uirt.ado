@@ -1894,7 +1894,7 @@ mata:
 // ADDING PVs
 		if(pv>0){
 			// giving small burn, because: proposition distribution fixed at a posteriori + we already start with pseudo-plausible + each conditioned burn step = 5 draws
-			burn					= 10
+			burn					= 14  // in most cases 10 seems to be enough, TDL - promote to argument?
 			draw_from_chain			= 10
 			max_independent_chains	=	100
 			if(group!="."){
@@ -5201,7 +5201,9 @@ mata:
 	
  
  	real matrix generate_pv(_Q, _G, real scalar pv, real scalar draw_from_chain, real scalar max_independent_chains, real scalar burn, real matrix Theta_dup, pointer matrix  point_Uigc, pointer matrix point_Fg, string scalar pvreg, real matrix Theta_id, real scalar if_progress, real matrix V){
-	
+
+		between_mixed_draws = 5 // number of draws after priors updated in conditioned pv generation; TDL - promote to argument?
+
 		class ITEMS scalar Q
 		Q=_Q
 		class GROUPS scalar G
@@ -5209,9 +5211,6 @@ mata:
 	
 		N_gr	= G.n
 		I		= Q.n
-
-		if_not_pvreg_yet=1 // indicate one-time job in case pvreg is used
-		between_mixed_draws = 5 // number of draws after priors updated in conditioned pv generation
 
 		//and, unfortunately, now we have to uncontract the point_Uigc
 		point_Uigc_dup			= J(I,N_gr,NULL)
@@ -5249,7 +5248,6 @@ mata:
 		estim_range						= select((1::rows(long_final_estimates)),diagonal(V):!=0)
 		long_final_estimates_perturbed  = long_final_estimates
 
-		count_pv=0
 		if(if_progress){
 			if(if_progress==1){
 				stata("display "+char(34)+"Generating PVs: 0%"+char(34)+" _c")
@@ -5277,7 +5275,9 @@ mata:
 
 		class ITEMS scalar Qx
 		class GROUPS scalar Gx
-		
+
+		if_not_pvreg_yet=1 // indicate one-time job in case pvreg is used
+		count_pv=0
 		for(chain=1;chain<=max_chain;chain++){
 			
 			if(chain>chain_ceilfloor_cut){
@@ -5354,12 +5354,22 @@ mata:
 					current_pv_index		= st_addvar("double",current_pv_name)
 					st_store(Theta_id,current_pv_index,theta_tt)
 
-	                //xtmixed in Stata 10 does not handle factor notation
-					if(stataversion()>=1200){
-						statasetversion(stataversion())
+					if((i+burn)<floor(burn*0.75)){ // lower specs at initial burn stage
+						mixed_emtolerance = "emtolerance(1e-7)"
+						draws_multiplier = 1
+					}
+					else{
+						mixed_emtolerance = "" // default
+						draws_multiplier = 2
 					}
 
-					stata("qui xtmixed "+current_pv_name+" "+pvreg+",iter(50)")
+					if(stataversion()>=1200){ //xtmixed in Stata 10 does not handle factor notation, and mixed is faster
+						statasetversion(stataversion())
+						stata("qui mixed "+current_pv_name+" "+pvreg+",iter(40) nostderr "+mixed_emtolerance)
+					}
+					else{
+						stata("qui xtmixed "+current_pv_name+" "+pvreg+",iter(40) nostderr "+mixed_emtolerance)
+					}
 
 					k_random_effects		= st_numscalar("e(k_r)")
 
@@ -5452,15 +5462,15 @@ mata:
 						g_mean = Gx.get(Gx.pars,g)[1]
 						g_var = Gx.get(Gx.pars,g)[2]^2
 
-                        if(rows(g_range)){
-                            residuals_var = variance(theta_tt[g_range]-_prior_E[g_range])
-                            theta_tt_var = variance(theta_tt[g_range])
-                            rescaling_factor = sqrt(g_var/theta_tt_var) // keeps group scale in check
-                            mean_prior_E = mean(_prior_E[g_range])
+						if(rows(g_range)){
+							residuals_var = variance(theta_tt[g_range]-_prior_E[g_range])
+							theta_tt_var = variance(theta_tt[g_range])
+							rescaling_factor = sqrt(g_var/theta_tt_var) // keeps group scale in check
+							mean_prior_E = mean(_prior_E[g_range])
 
-                            _prior_E[g_range] = (_prior_E[g_range] :- mean_prior_E):*rescaling_factor :+ g_mean
-                            _prior_V[g_range] =  J(rows(g_range),1, residuals_var * rescaling_factor )
-//                          _prior_V[g_range] =  (g_var - (var_prior_E+ mean_prior_V))  :* (_prior_V[g_range]:/mean_prior_V) // <-- pred specific weights, unstable
+							_prior_E[g_range] = (_prior_E[g_range] :- mean_prior_E):*rescaling_factor :+ g_mean
+							_prior_V[g_range] =  J(rows(g_range),1, residuals_var * rescaling_factor )
+//							_prior_V[g_range] =  (g_var - (var_prior_E+ mean_prior_V))  :* (_prior_V[g_range]:/mean_prior_V) // <-- pred specific weights, unstable
 						}
 					}
 					prior_mean[nonmiss_pred_ids] = _prior_E
@@ -5469,8 +5479,7 @@ mata:
 					stata("qui drop " + current_prior_name+"*")
 					statasetversion(1000) // resetting to Stata 1000
 
-
-                    for(draw=1; draw<=between_mixed_draws; draw++){
+					for(draw=1; draw<=between_mixed_draws*draws_multiplier; draw++){
 					    theta_tt = mcmc_step(Qx, theta_tt, sd_prop , prior_mean, prior_sd, point_Uigc_dup)
 					}
 					
