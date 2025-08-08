@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 2.2.1 2022.11.13}{...}
+{* *! version 2.2.2 2025.08.08}{...}
 {viewerjumpto "Syntax" "uirt##syntax"}{...}
 {viewerjumpto "Postestimation commands" "uirt##postestimation"}{...}
 {viewerjumpto "Description" "uirt##description"}{...}
@@ -408,15 +408,17 @@ it is used to perform conditioning of plausible values on ancillary variables.
 If other variables, than the ones used in defining the IRT model,
 are to be used in the analyses performed with PVs, these variables need to be included in {opt pvreg()} sub-option. 
 Otherwise, the analyses will produce effects which are biased towards 0.
-The syntax for {opt pvreg()} is the same as in defining the regression term in {helpb xtmixed},  e.g. pvreg(ses ||school:).
+The syntax for {opt pvreg()} is the same as in defining the regression term in {helpb mixed},  e.g. pvreg(ses ||school:).
 Note that multilevel modelling is allowed here.
 If {opt pv()} is called without {opt pvreg()} the PVs for all observations within a group are generated with the same
 normal prior distribution of ability with parameters taken from {cmd:e(group_par)}.
 By including the {opt pvreg()} sub-option the procedure of generating PVs is modified in such a way that after each MCMC step 
-a regression of the ability on the variables provided by the user is performed by {cmd:xtmixed}. The {cmd:xtmixed}
+a regression of the ability on the variables provided by the user is performed by {cmd:mixed}. The {cmd:mixed}
 model estimates are then used to recompute the priors.
-Note that if some observations are excluded from {cmd:xtmixed} run (for example due to missing cases on any of the regressors)
+Note that if some observations are excluded from {cmd:mixed} run (for example due to missing cases on any of the regressors)
 these observations will not be conditioned.
+History of updates of regression parameters during the MCMC burn
+is stored in {cmd:e(pvreg_b_hist)}, it can be used to monitor convergence per each chain.
 
 {pmore}
 {opt suf:fix(name)} is a sub-option of {opt th:eta()};
@@ -671,6 +673,7 @@ also plot ICC for that item{p_end}
 {synopt:{cmd:e(dif_item_par_GF)}}parameters of DIF items obtained in the focal group{p_end}
 {synopt:{cmd:e(item_fit_chi2W)}}item-fit results for chi2W statistic{p_end}
 {synopt:{cmd:e(item_fit_SX2)}}item-fit results for S-X2 statistic{p_end}
+{synopt:{cmd:e(pvreg_b_hist)}}history of updates of regression parameters{p_end}
 
 
 {title:Author}

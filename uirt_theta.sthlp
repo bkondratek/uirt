@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.1 2022.01.24}{...}
+{* *! version 1.2 2025.08.08}{...}
 {viewerjumpto "Syntax" "uirt_theta##syntax"}{...}
 {viewerjumpto "Description" "uirt_theta##description"}{...}
 {viewerjumpto "Options" "uirt_theta##options"}{...}
@@ -80,15 +80,17 @@ Additional {opt pvreg()} option allows to modify the procedure so that it includ
 If other variables, than the ones used in defining the IRT model,
 are to be used in the analyses performed with PVs, these variables need to be included in {opt pvreg()} option. 
 Otherwise, the analyses will produce effects which are biased towards 0.
-The syntax for {opt pvreg()} is the same as in defining the regression term in {helpb xtmixed},  e.g. pvreg(ses ||school:).
+The syntax for {opt pvreg()} is the same as in defining the regression term in {helpb mixed},  e.g. pvreg(ses ||school:).
 Note that multilevel modelling is allowed here.
 If {opt pv()} is called without {opt pvreg()} the PVs for all observations within a group are generated with the same
 normal prior distribution of ability with parameters taken from {cmd:e(group_par)}.
 By including the {opt pvreg()} option the procedure of generating PVs is modified in such a way that after each MCMC step 
-a regression of the ability on the variables provided by the user is performed by {cmd:xtmixed}. The {cmd:xtmixed}
+a regression of the ability on the variables provided by the user is performed by {cmd:mixed}. The {cmd:mixed}
 model estimates are then used to recompute the priors.
-Note that if some observations are excluded from {cmd:xtmixed} run (for example due to missing cases on any of the regressors)
-these observations will not be conditioned.
+Note that if some observations are excluded from {cmd:mixed} run (for example due to missing cases on any of the regressors)
+these observations will not be conditioned. History of updates of regression parameters during the MCMC burn
+is stored in {cmd:r(pvreg_b_hist)}, it can be used to monitor convergence per each chain.
+
 
 {phang}
 {opt suf:fix(name)} specifies a suffix used in naming new EAP and PVs variables.
@@ -133,8 +135,9 @@ the EAP estimates will most probably have smaller standard deviation in the refe
 {marker results}{...}
 {title:Stored results}
 
-{syntab: {cmd: uirt_theta} does not store anything in r():}
-
+{syntab: If {opt pvreg(str)} is used, {cmd: uirt_theta} stores the following in r():}
+{p2col 5 17 21 2: Matrices}{p_end}
+{synopt:{cmd:r(pvreg_b_hist)}}history of updates of regression parameters{p_end}
 
 {title:Author}
 
