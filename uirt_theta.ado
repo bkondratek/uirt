@@ -1,10 +1,10 @@
 *uirt_theta.ado 
-*ver 1.1
-*2022.01.24
+*ver 1.2
+*2025.08.08
 *everythingthatcounts@gmail.com
 
 capture prog drop uirt_theta
-program define uirt_theta
+program define uirt_theta, rclass
 version 10
 syntax [namelist] [, eap nip(numlist integer max=1 >=2 <=195) pv(numlist integer max=1 >=0) pvreg(str) SUFfix(namelist max=1) SCale(numlist max=2 min=2) SKIPNote]  
 	
@@ -24,8 +24,16 @@ syntax [namelist] [, eap nip(numlist integer max=1 >=2 <=195) pv(numlist integer
 		m: stata("qui estimates store "+backup_e)
 			
 		m: st_local("errcode",strofreal(_stata("`e(cmdstrip)' `postest' fix(prev used) err(stored) nit(0) tr(0) not noh")))
+		
 		if(`errcode'){
+			m: stata("qui estimates restore "+backup_e)
+			m: stata("qui estimates drop "+backup_e)
 			exit `errcode'
+		}
+		
+		if(strlen("`pvreg'")){
+			mat temp = e(pvreg_b_hist)
+			return matrix pvreg_b_hist temp
 		}
 		
 		m: stata("qui estimates restore "+backup_e)
