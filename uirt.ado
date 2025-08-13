@@ -1067,10 +1067,10 @@ syntax [varlist] [if] [in] [, GRoup(str asis)  pcm(varlist) gpcm(varlist) GUEssi
 		if("`trace'"==""){
 			local trace=1
 		}
-		
-						
+
+
 		m: uirt( "`touse'", "`items'", "`group'", `reference', `estimate_dist', `upd_quad_betw_em', "`errors'",stored_V, pcmlist, gpcmlist, guesslist, `guessing_attempts',`guessing_lrcrit', diflist,`add_theta', eap_names, "`theta_suffix'", `theta_nip', theta_scale, theta_notes, "`savingname'", "`fix_imatrix'", "`init_imatrix'", "`fix_cmatrix'", "`init_dmatrix'", "`fix_dmatrix'", `icc_cleargraphs',`icc_obs', icclist, chi2wlist, chi2w_control, sx2list, sx2_control,`trace',`nip',`nit', `ninrf', `pv', "`pvreg'", `crit_ll', `crit_par', `icc_bins', `icc_pvbin', "`icc_format'",st_local("icc_tw"),icc_colours, icc_prefix_suffix, "`dif_format'",st_local("dif_tw"),dif_colours,`dif_cleargraphs', a_normal_prior, b_normal_prior, c_beta_prior, priorslist,esflist, `esf_bins', "`esf_format'",st_local("esf_tw"),esf_colour, esf_prefix_suffix, `esf_cleargraphs',`esf_obs', `esf_mode', inflist,`inf_mode', st_local("inf_tw"), `inf_ifgr', `check_a' )
-		
+
 		m: stata("ereturn local cmdline "+char(34)+eret_cmdline+char(34))
 		m: eret_cmdstrip=strtrim("uirt `e(depvar)' "+eret_if+" "+eret_in+","+etet_grstrip+" nip(`nip') ninrf(`ninrf') crit_par(`crit_par') crit_ll(`crit_ll') `anegative' "+eret_priorstrip)
 		m: stata("ereturn local cmdstrip "+char(34)+eret_cmdstrip+char(34))
@@ -1764,7 +1764,7 @@ mata:
 
 // THE UIRT
 	void uirt(string scalar touse, string scalar items, string scalar group, real scalar ref, real scalar estimate_dist, real scalar upd_quad_betw_em, string scalar errors, real matrix stored_V, string matrix pcmlist,string matrix gpcmlist, string matrix guesslist, real scalar guessing_attempts, real scalar guessing_lrcrit, string matrix diflist, real scalar add_theta, string matrix eap_names, string scalar theta_suffix, real scalar theta_nip, real matrix theta_scale, string scalar theta_notes, string scalar savingname , string scalar fiximatrix, string scalar initimatrix, string scalar catimatrix, string scalar initdmatrix, string scalar fixdmatrix, real scalar icc_cleargraphs, real scalar icc_obs, string matrix icclist, string matrix fitlist, real matrix chi2w_control, string matrix sx2_fitlist, real matrix sx2_control, real scalar trace, real scalar nip,real scalar nit,real scalar nnirf,real scalar pv,string scalar pvreg, real scalar crit_ll, real scalar crit_par, real scalar icc_bins, real scalar icc_pvbin,string scalar icc_format, string scalar icc_tw, string matrix icc_colours, string matrix icc_prefix_suffix, string scalar dif_format, string scalar dif_tw, string matrix dif_colours, real scalar dif_cleargraphs, real matrix a_normal_prior, real matrix b_normal_prior, real matrix c_beta_prior, string matrix priorslist, string matrix esflist, real scalar esf_bins, string scalar esf_format, string scalar esf_tw, string matrix esf_colour, string matrix esf_prefix_suffix, real scalar esf_cleargraphs, real scalar esf_obs, real scalar esf_mode, string matrix inflist, real scalar inf_mode, string scalar inf_tw, inf_ifgr ,real scalar check_a){
-	
+
 		N_iter		=nit
 		N_iter_NRF	=nnirf
 
@@ -2070,9 +2070,9 @@ mata:
 		}
 
 		if(sum(Q.get(Q.fit_sx2,.))){
-					
+
 			SX2(Q, cloneG(G), sx2_control,  point_Uigc, point_Fg, V)
-			
+
 			fit_indx=select((1::Q.n),Q.get(Q.fit_sx2,.))
 
 			st_matrix("item_fit_SX2",Q.get(Q.SX2_res,fit_indx))
@@ -6387,7 +6387,7 @@ mata:
 
 // FIT functions
 	void SX2(_Q, _Gx, real matrix sx2_control, pointer matrix point_Uigc, pointer matrix point_Fg, real matrix V){
-	
+
 		class ITEMS scalar Q
 		Q=_Q
 		class GROUPS scalar Gx
@@ -6417,7 +6417,7 @@ mata:
 			dEik_i=*collapse_cats_results[7]
 			min_np_nq = min (	( *collapse_cats_results[4] , *collapse_cats_results[5] ) )
 
-			dEik_i = sqrt(Nik_obs_i) :* dEik_i
+			dEik_i = sqrt(Nik_obs_i :/ (Eik_i:*(1:-Eik_i))) :* dEik_i
 
 			v_i_range = select((1::rows(V)), V_rownames[.,1]:== Q.get(Q.names,item_indx[i])) // we are assuming par order is fixed (as for now - it is)
 			v_i = V[v_i_range,v_i_range'] // TDL - work out the 1plm case (the issue with common a estimated as sd, and error transfered to the 1st item)
@@ -6438,7 +6438,7 @@ mata:
 
 
 	pointer sx2_orlando_thissen(real scalar item_for_fit, real matrix Eik, real matrix Nik, real matrix score_range, real matrix S, real scalar n_est_par, pointer matrix point_Uigc, pointer matrix point_Fg, real matrix cov_SX2){
-	
+
 		obs_i=J(rows(*point_Fg[1]),1,0)
 		ord_ic = (*(*point_Uigc[item_for_fit,1])[2])
 		if(rows(ord_ic)){
@@ -6624,7 +6624,7 @@ mata:
 		Sk_less[2,]=f_PiXk_matrix[1,]
 		for(i=2;i<=I-1;i++){
 			current=Sk_less[1,]
-			Sk_less[1,]=current :*(1:-f_PiXk_matrix[i,]) 
+			Sk_less[1,]=current :*(1:-f_PiXk_matrix[i,])
 			for(s=2;s<=i;s++){
 				previous=current
 				current=Sk_less[s,]
@@ -6655,12 +6655,10 @@ mata:
 			N_Eik = rowsum(P_quadpts :* (f_PiXk_matrix[I,.] :* Sk_less[i,.]) )
 			D_Eik = Sk_all[i+1,.]
 			Eik[i] = N_Eik / D_Eik
-			sqrt_var_ik = sqrt(Eik[i]*(1-Eik[i])) // this standard deviation does not include N_k
 			for(p = 1; p <= rows(dTi_Xk); p++){
 				dN_Eik = rowsum(P_quadpts :* (dTi_Xk[p,.] :* Sk_less[i,.]))
 				dD_Eik = rowsum(P_quadpts :* (dTi_Xk[p,.] :* (Sk_less[i,] :- Sk_less[i+1,])))
 				dEik[i,p] = ( D_Eik * dN_Eik - N_Eik * dD_Eik) /  D_Eik^2
-				dEik[i,p] = dEik[i,p] / sqrt_var_ik
 			}
 		}
 
@@ -7981,7 +7979,7 @@ mata:
 		results[4] = &Theta_dup
 		return(results)
 	}
-	
+
 	void check_sx2(_Q, _G, string matrix sx2_fitlist, real matrix sx2_control){
 		class ITEMS scalar Q
 		Q=_Q
