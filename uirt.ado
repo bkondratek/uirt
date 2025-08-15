@@ -1,6 +1,6 @@
 *uirt.ado 
 *ver 2.3.0
-*2025.04.04
+*2025.08.13
 *everythingthatcounts@gmail.com
 
 capture prog drop uirt
@@ -6497,7 +6497,7 @@ mata:
 		
 		warning=""
 		n_sc=rows(Nik_obs)
-		score_range=(1::n_sc),(1::n_sc)
+		score_range=(0::n_sc-1),(0::n_sc-1) // 0 and max scores included - TDL make sure they are always collapsed, i.e. fixed_K control
 
 		exp_freq_1=Nik_obs:*Eik
 		exp_freq_0=Nik_obs:*(1:-Eik)
@@ -6662,6 +6662,9 @@ mata:
 			}
 		}
 
+		//adding 0 and max score entries
+		Eik = 0\Eik\1
+		dEik = J(1,cols(dEik),0)\dEik\J(1,cols(dEik),0)
 		
 		results=J(2,1,NULL)
 		results[1]=return_pointer(Eik) // not multiplied by Nk
@@ -6682,13 +6685,12 @@ mata:
 			}
 		}
 
-		// observed score counts - they are the same for all items and we use them for weighting (we are excluding 0 and max score)
-		n_sc=rows(viable_for_sx2)-1
+		// observed score counts - they are the same for all items and we use them for weighting (NOT excluding 0 and max score)
+		n_sc=rows(viable_for_sx2)+1
 		Nik_obs=J(n_sc,1,0)
-		scores=(1::n_sc)
-		obs_i=J(rows(*point_Fg[1]),1,0)
+		scores=(0::n_sc-1)
 		for(i=1;i<=n_sc;i++){
-			sel_i=select((1::rows(obs_i)), (S:==scores[i]))
+			sel_i=select((1::rows(S)), (S:==scores[i]))
 			if(rows(sel_i)){
 				Nik_obs[i]=sum((*point_Fg[1])[sel_i])
 			}
