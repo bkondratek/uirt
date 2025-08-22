@@ -6409,7 +6409,13 @@ mata:
 			Eik_i=*LW_results[1]
 			dEik_i=*LW_results[2]
 
-			collapse_cats_results=sx2_collapse_cats(Eik_i,dEik_i,Nik_obs,sx2_control)
+			if(sx2_control[2]!=.){ // experimenting with centile-only collapse
+				collapse_cats_results=sx2_collapse_cats_fixed_centile(Eik_i,dEik_i,Nik_obs,sx2_control)
+			}
+			else{
+				collapse_cats_results=sx2_collapse_cats(Eik_i,dEik_i,Nik_obs,sx2_control)
+			}
+
 			Eik_i=*collapse_cats_results[1]
 			score_range=*collapse_cats_results[2]
 			Nik_obs_i = *collapse_cats_results[3]
@@ -6483,6 +6489,119 @@ mata:
 
 		return(results)
 	
+	}
+
+	pointer sx2_collapse_cats_fixed_centile(real matrix Eik_in, real matrix dEik_in, real matrix Nik_obs_in, real matrix sx2_control) {
+
+		sx2_fixed_K = sx2_control[2]
+
+		// collapse extremes
+		n_sc = rows(Nik_obs_in)
+		score_range = (0,1) \ J(1,2,(2::n_sc-3)) \ (n_sc-2, n_sc-1)
+
+		Eik = J(0,1,.)
+		dEik = J(0,cols(dEik_in),.)
+		Nik_obs = J(0,1,.)
+		for (i = 1; i <= rows(score_range); i++) {
+			i1 = score_range[i, 1] + 1
+			i2 = score_range[i, 2] + 1
+			w = Nik_obs_in[i1::i2]
+			Eik = Eik \ (Eik_in[i1::i2]' * w / sum(w))
+			dEik = dEik \ (colsum(dEik_in[i1::i2, .] :* w)) / sum(w)
+			Nik_obs = Nik_obs \ sum(w)
+		}
+
+		n = rows(Nik_obs)
+		T = sum(Nik_obs) / sx2_fixed_K
+		if(n>sx2_fixed_K){
+
+			// build cumulative weight matrix
+			weight = J(n, n, .)
+			for (i = 1; i <= n; i++) {
+				w = 0
+				for (j = i; j <= n; j++) {
+					w = w + Nik_obs[j]
+					weight[i,j] = (w - T)^2
+				}
+			}
+
+			// DP table
+			dp = J(sx2_fixed_K, n, .)
+			prev = J(sx2_fixed_K, n, .)
+
+			for (j = 1; j <= n; j++) {
+				dp[1,j] = weight[1,j]
+			}
+
+			for (k = 2; k <= sx2_fixed_K; k++) {
+				for (j = k; j <= n; j++) {
+					min_cost = .
+					for (i = k-1; i <= j-1; i++) {
+						if (dp[k-1,i] != . & weight[i+1,j] != .) {
+							cost = dp[k-1,i] + weight[i+1,j]
+							if (min_cost == . | cost < min_cost) {
+								min_cost = cost
+								dp[k,j] = cost
+								prev[k,j] = i
+							}
+						}
+					}
+				}
+			}
+
+			breaks = J(sx2_fixed_K, 2, .)
+			j = n
+			for (k = sx2_fixed_K; k >= 1; k--) {
+				if (k == 1) {
+					i = 0
+				} else {
+					i = prev[k,j]
+				}
+				breaks[k,.] = (i, j - 1)
+				j = i
+			}
+
+			// apply breaks
+			Eik_out = J(sx2_fixed_K, 1, .)
+			dEik_out = J(sx2_fixed_K, cols(dEik), .)
+			Nik_obs_out = J(sx2_fixed_K, 1, .)
+			score_range_out = J(sx2_fixed_K, 2, .)
+
+			for (k = 1; k <= sx2_fixed_K; k++) {
+				i1 = breaks[k,1] + 1
+				i2 = breaks[k,2] + 1
+				w = Nik_obs[i1::i2]
+				Eik_out[k] = (Eik[i1::i2]' * w) / sum(w)
+				dEik_out[k,.] = (colsum(dEik[i1::i2,.] :* w)) / sum(w)
+				Nik_obs_out[k] = sum(w)
+				score_range_out[k,.] = score_range[i1,.]
+				score_range_out[k,2] = score_range[i2,2]
+			}
+		}
+		else{
+			Eik_out = Eik
+			dEik_out = dEik
+			Nik_obs_out = Nik_obs
+			score_range_out = score_range
+		}
+
+
+		warning = ""
+		if (rows(Eik_out) > sx2_fixed_K) {
+			warning = "too few score categories to collapse to sx2_fixed_K=" + strofreal(sx2_fixed_K)
+		}
+
+		results = J(8,1,NULL)
+		results[1] = return_pointer(Eik_out)
+		results[2] = return_pointer(score_range_out)
+		results[3] = return_pointer(Nik_obs_out)
+		results[4] = return_pointer(Nik_obs_out :* Eik_out)
+		results[5] = return_pointer(Nik_obs_out :* (1 :- Eik_out))
+		results[6] = return_pointer(Nik_obs_out :* Eik_out :* (1 :- Eik_out))
+		results[7] = return_pointer(dEik_out)
+		results[8] = &warning
+
+		return(results)
 	}
 
 
