@@ -6406,28 +6406,29 @@ mata:
 		for(i=1;i<=I_fit;i++){
 
 			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i])
-			Eik_i=*LW_results[1]
-			dEik_i=*LW_results[2]
+			Eik_i_full=*LW_results[1]
+	//		dEik_i=*LW_results[2]
 
-			if(sx2_control[2]!=.){ // experimenting with centile-only collapse
-				collapse_cats_results=sx2_collapse_cats_fixed_centile(Eik_i,dEik_i,Nik_obs,sx2_control)
-			}
-			else{
-				collapse_cats_results=sx2_collapse_cats(Eik_i,dEik_i,Nik_obs,sx2_control)
-			}
+			dEik_full = differentiate_Eik(Q, Gx, item_indx[i], rows(Eik_i_full))
+
+	//		collapse_cats_results=sx2_collapse_cats(Eik_i,dEik_i,Nik_obs,sx2_control)
+			collapse_cats_results=sx2_collapse_cats(Eik_i_full,dEik_full,Nik_obs,sx2_control)
 
 			Eik_i=*collapse_cats_results[1]
 			score_range=*collapse_cats_results[2]
 			Nik_obs_i = *collapse_cats_results[3]
 			exp_NPQ=*collapse_cats_results[6]
-			dEik_i=*collapse_cats_results[7]
+	//		dEik_i=*collapse_cats_results[7]
+			dEik_i = differentiate_Eik_collapsed(Q, Gx, item_indx[i], Nik_obs , score_range)
+
 			min_np_nq = min (	( *collapse_cats_results[4] , *collapse_cats_results[5] ) )
 
 			dEik_i = sqrt(Nik_obs_i :/ (Eik_i:*(1:-Eik_i))) :* dEik_i
 
-			v_i_range = select((1::rows(V)), V_rownames[.,1]:== Q.get(Q.names,item_indx[i])) // we are assuming par order is fixed (as for now - it is)
-			v_i = V[v_i_range,v_i_range'] // TDL - work out the 1plm case (the issue with common a estimated as sd, and error transfered to the 1st item)
-			cov_SX2_i = I(rows(dEik_i)) - dEik_i*v_i*dEik_i'
+	//		v_i_range = select((1::rows(V)), V_rownames[.,1]:== Q.get(Q.names,item_indx[i])) // we are assuming par order is fixed (as for now - it is)
+	//		v_i = V[v_i_range,v_i_range'] // TDL - work out the 1plm case (the issue with common a estimated as sd, and error transfered to the 1st item)
+	//		cov_SX2_i = I(rows(dEik_i)) - dEik_i*v_i*dEik_i'
+			cov_SX2_i = I(rows(dEik_i))- dEik_i*V*dEik_i'
 
 			n_est_par	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
 
@@ -6689,7 +6690,108 @@ mata:
 		return(results)
 	}
 
+		real matrix differentiate_Eik_collapsed(_Q, _Gx, real scalar item_for_fit, real matrix Nik_obs, real matrix score_range){
 
+			class ITEMS scalar Q
+			Q=_Q
+			class GROUPS scalar Gx
+			Gx=_Gx
+
+			long_final_estimates=create_long_vector(Q,Gx,"pars")
+			N_par=rows(long_final_estimates)
+			Cns_matrix=create_long_Cns_matrix(Q,Gx)
+			Cns_ind = colsum(lowertriangle(Cns_matrix'*Cns_matrix))
+
+			class ITEMS scalar Qpar
+			class GROUPS scalar Gpar
+			Qpar=cloneQ(Q)
+			Gpar=cloneG(Gx)
+
+			//perturbation = crit_par*10
+			perturbation = 10^-3
+			perturb_by=(perturbation,-perturbation)'
+			multiply_by=(1,-1)'
+
+			n_sc = rows(score_range)
+			Long_gradient_matrix = J(n_sc,N_par,0)
+			for(h=1;h<=rows(perturb_by);h++){
+				for(par=1;par<=N_par;par++){
+					if(Cns_ind[par]==0){ // skip fixed parameters; we will run into problems when dealing with - TDL: incorporate contraints
+
+							long_final_estimates_par			= long_final_estimates
+							long_final_estimates_par[par]		= long_final_estimates_par[par]+perturb_by[h]
+
+							Qpar.put(Qpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,0))
+
+							Gpar.put(Gpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,1))
+
+							Eik_full_pert = *sx2_lord_wingersky(Qpar, Gpar,  item_for_fit)[1]
+							Eik_pert = J(0,1,.)
+							for (i = 1; i <= rows(score_range); i++) {
+								i1 = score_range[i, 1] + 1
+								i2 = score_range[i, 2] + 1
+								w = Nik_obs[i1::i2]
+								Eik_pert = Eik_pert \ (Eik_full_pert[i1::i2]' * w / sum(w))
+
+							}
+
+							Long_gradient_matrix[.,par]=  Long_gradient_matrix[.,par] :+ multiply_by[h] :* Eik_pert
+					}
+				}
+			}
+
+			Long_gradient_matrix = Long_gradient_matrix :/ (2*perturbation)
+
+			return(Long_gradient_matrix)
+
+	}
+
+	real matrix differentiate_Eik(_Q, _Gx, real scalar item_for_fit, real scalar n_sc){
+
+			class ITEMS scalar Q
+			Q=_Q
+			class GROUPS scalar Gx
+			Gx=_Gx
+
+			long_final_estimates=create_long_vector(Q,Gx,"pars")
+			N_par=rows(long_final_estimates)
+			Cns_matrix=create_long_Cns_matrix(Q,Gx)
+			Cns_ind = colsum(lowertriangle(Cns_matrix'*Cns_matrix))
+
+			class ITEMS scalar Qpar
+			class GROUPS scalar Gpar
+			Qpar=cloneQ(Q)
+			Gpar=cloneG(Gx)
+
+			//perturbation = crit_par*10
+			perturbation = 10^-3
+			perturb_by=(perturbation,-perturbation)'
+			multiply_by=(1,-1)'
+
+			Long_gradient_matrix = J(n_sc,N_par,0)
+			for(h=1;h<=rows(perturb_by);h++){
+				for(par=1;par<=N_par;par++){
+					if(Cns_ind[par]==0){ // skip fixed parameters; we will run into problems when dealing with - TDL: incorporate contraints
+
+							long_final_estimates_par			= long_final_estimates
+							long_final_estimates_par[par]		= long_final_estimates_par[par]+perturb_by[h]
+
+							Qpar.put(Qpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,0))
+
+							Gpar.put(Gpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,1))
+
+							Eik_full = *sx2_lord_wingersky(Qpar, Gpar,  item_for_fit)[1]
+
+							Long_gradient_matrix[.,par]=  Long_gradient_matrix[.,par] :+ multiply_by[h] :* Eik_full
+					}
+				}
+			}
+
+			Long_gradient_matrix = Long_gradient_matrix :/ (2*perturbation)
+
+			return(Long_gradient_matrix)
+
+	}
 		
 	pointer sx2_lord_wingersky(_Q, _Gx, real scalar item_for_fit){
 
