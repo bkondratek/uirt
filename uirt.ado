@@ -6405,23 +6405,25 @@ mata:
 		
 		for(i=1;i<=I_fit;i++){
 
-			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i])
+			ifdEik_i=0
+			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i], ifdEik_i)
 			Eik_i_full=*LW_results[1]
-	//		dEik_i=*LW_results[2]
+			PSk_full = *LW_results[2]
 
-			dEik_full = differentiate_Eik(Q, Gx, item_indx[i], rows(Eik_i_full))
-
-	//		collapse_cats_results=sx2_collapse_cats(Eik_i,dEik_i,Nik_obs,sx2_control)
-			collapse_cats_results=sx2_collapse_cats(Eik_i_full,dEik_full,Nik_obs,sx2_control)
-
+			Nik_exp = sum(Nik_obs)*PSk_full
+			collapse_cats_results=sx2_collapse_cats(Eik_i_full,Nik_exp,sx2_control)
 			Eik_i=*collapse_cats_results[1]
 			score_range=*collapse_cats_results[2]
-			Nik_obs_i = *collapse_cats_results[3]
-			exp_NPQ=*collapse_cats_results[6]
-	//		dEik_i=*collapse_cats_results[7]
-			dEik_i = differentiate_Eik_collapsed(Q, Gx, item_indx[i], Nik_obs , score_range)
-
 			min_np_nq = min (	( *collapse_cats_results[4] , *collapse_cats_results[5] ) )
+
+			Nik_obs_i = J(rows(score_range),1,.)
+			for (ii = 1; ii <= rows(score_range); ii++) {
+				i1 = score_range[ii, 1] + 1
+				i2 = score_range[ii, 2] + 1
+				Nik_obs_i[ii] = sum(Nik_obs[i1::i2])
+			}
+
+			dEik_i = differentiate_Eik_collapsed(Q, Gx, item_indx[i], score_range)
 
 			dEik_i = sqrt(Nik_obs_i :/ (Eik_i:*(1:-Eik_i))) :* dEik_i
 
@@ -6494,6 +6496,7 @@ mata:
 
 	pointer sx2_collapse_cats_fixed_centile(real matrix Eik_in, real matrix dEik_in, real matrix Nik_obs_in, real matrix sx2_control) {
 
+		// TDL - note that we skipped returning dEik and using observed counts - not accounted for below
 		sx2_fixed_K = sx2_control[2]
 
 		// collapse extremes
@@ -6606,22 +6609,21 @@ mata:
 	}
 
 
-	pointer sx2_collapse_cats(real matrix Eik_in, real matrix dEik_in, real matrix Nik_obs_in, real matrix sx2_control){
+
+	pointer sx2_collapse_cats(real matrix Eik, real matrix Nik, real matrix sx2_control){
+
+		// Weights are assumed to sum up to N here
 
 		sx2_min_freq = sx2_control[1]
 		sx2_fixed_K = sx2_control[2]
 
-		Eik=Eik_in
-		dEik = dEik_in
-		Nik_obs=Nik_obs_in
-		
 		warning=""
-		n_sc=rows(Nik_obs)
+		n_sc=rows(Nik)
 		score_range=(0::n_sc-1),(0::n_sc-1) // 0 and max scores included - TDL make sure they are always collapsed, i.e. fixed_K control
 
-		exp_freq_1=Nik_obs:*Eik
-		exp_freq_0=Nik_obs:*(1:-Eik)
-		exp_NPQ = exp_freq_1 :* (1 :- Eik)
+		exp_freq_1=Nik:*Eik
+		exp_freq_0=Nik:*(1:-Eik)
+//		exp_NPQ = exp_freq_1 :* (1 :- Eik)
 
 		while (rows(Eik) > 1 & ((sx2_fixed_K==. & min((exp_freq_1 :< exp_freq_0) :* exp_freq_1 :+ (exp_freq_0 :<= exp_freq_1) :* exp_freq_0) < sx2_min_freq) |
 			   (sx2_fixed_K!=. & rows(Eik) > sx2_fixed_K))) {
@@ -6648,27 +6650,24 @@ mata:
 			}
 
 			idx = (i<j ? i : j)
-			w = Nik_obs[idx::idx+1]
+			w = Nik[idx::idx+1]
 			Eik[idx] = (Eik[idx::idx+1]'*w)/sum(w)
-			dEik[idx,.] = (w[1]*dEik[idx,.] + w[2]*dEik[idx+1,.]) / sum(w)
-			Nik_obs[idx] = sum(w)
+			Nik[idx] = sum(w)
 			score_range[idx,2] = score_range[idx+1,2]
 
 			if (idx+2<=rows(Eik)) {
 				Eik = Eik[1::idx] \ Eik[(idx+2)::rows(Eik)]
-				dEik = dEik[1::idx,.] \ dEik[(idx+2)::rows(dEik),.]
-				Nik_obs = Nik_obs[1::idx] \ Nik_obs[(idx+2)::rows(Nik_obs)]
+				Nik = Nik[1::idx] \ Nik[(idx+2)::rows(Nik)]
 				score_range = score_range[1::idx, .] \ score_range[(idx+2)::rows(score_range), .]
 			} else {
 				Eik = Eik[1::idx]
-				dEik = dEik[1::idx,.]
-				Nik_obs = Nik_obs[1::idx]
+				Nik = Nik[1::idx]
 				score_range = score_range[1::idx, .]
 			}
 
-			exp_freq_1=Nik_obs:*Eik
-			exp_freq_0=Nik_obs:*(1:-Eik)
-			exp_NPQ = exp_freq_1 :* (1 :- Eik)
+			exp_freq_1=Nik:*Eik
+			exp_freq_0=Nik:*(1:-Eik)
+//			exp_NPQ = exp_freq_1 :* (1 :- Eik)
 		}
 
 		if (sx2_fixed_K == . & rows(Eik) <= 1) {
@@ -6681,16 +6680,16 @@ mata:
 		results=J(8,1,NULL)
 		results[1]=return_pointer(Eik)
 		results[2]=return_pointer(score_range)
-		results[3]=return_pointer(Nik_obs)
+		results[3]=return_pointer(Nik)
 		results[4]=return_pointer(exp_freq_1)
 		results[5]=return_pointer(exp_freq_0)
-		results[6]=return_pointer(exp_NPQ)
-		results[7]=return_pointer(dEik)
+//		results[6]=return_pointer(exp_NPQ)
+//		results[7]=return_pointer(dEik)
 		results[8]=&warning
 		return(results)
 	}
 
-		real matrix differentiate_Eik_collapsed(_Q, _Gx, real scalar item_for_fit, real matrix Nik_obs, real matrix score_range){
+		real matrix differentiate_Eik_collapsed(_Q, _Gx, real scalar item_for_fit, real matrix score_range){
 
 			class ITEMS scalar Q
 			Q=_Q
@@ -6725,14 +6724,15 @@ mata:
 
 							Gpar.put(Gpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,1))
 
-							Eik_full_pert = *sx2_lord_wingersky(Qpar, Gpar,  item_for_fit)[1]
-							Eik_pert = J(0,1,.)
-							for (i = 1; i <= rows(score_range); i++) {
+							LW_results = sx2_lord_wingersky(Qpar, Gpar,  item_for_fit, 0)
+							Eik_full_pert = *LW_results[1]
+							PSk_full_pert = *LW_results[2]
+							Eik_pert = J(n_sc,1,.)
+							for (i = 1; i <= n_sc; i++) {
 								i1 = score_range[i, 1] + 1
 								i2 = score_range[i, 2] + 1
-								w = Nik_obs[i1::i2]
-								Eik_pert = Eik_pert \ (Eik_full_pert[i1::i2]' * w / sum(w))
-
+								w = PSk_full_pert[i1::i2]
+								Eik_pert[i] = (Eik_full_pert[i1::i2]' * w / sum(w))
 							}
 
 							Long_gradient_matrix[.,par]=  Long_gradient_matrix[.,par] :+ multiply_by[h] :* Eik_pert
@@ -6793,12 +6793,7 @@ mata:
 
 	}
 		
-	pointer sx2_lord_wingersky(_Q, _Gx, real scalar item_for_fit){
-
-		class ITEMS scalar Q
-		Q=_Q
-		class GROUPS scalar Gx
-		Gx=_Gx
+	pointer sx2_lord_wingersky(class ITEMS  scalar Q, class GROUPS scalar Gx, real scalar item_for_fit, real scalar if_dEik){
 
 		I=Q.n
 		itemselectrange_g 	= select((1::I),Q.get(Q.viable_sx2,.))
@@ -6822,22 +6817,24 @@ mata:
 			}
 		}
 
-		// derivatives necessary to obtain the gradient
-		a = parameters_g[I,1]
-		b = parameters_g[I,2]
-		if(model_curr_asked_g[I,1] != "3plm"){
-			dTi_Xk = J(2, K, .)
-			PQ = f_PiXk_matrix[I,.] :* (1 :- f_PiXk_matrix[I,.])
-			dTi_Xk[1,.] = (quadpts :- b) :* PQ // a
-			dTi_Xk[2,.] = -a :* PQ // b
-		}
-		else{
-			dTi_theta = J(3, K, .)
-			c = parameters_g[I,3]
-			PcQ = (f_PiXk_matrix[I,.] :- c) :* (1 :- f_PiXk_matrix[I,.])
-			dTi_Xk[1,.] = (quadpts :- b) :* PcQ // a
-			dTi_Xk[2,.] = -a :* (1 :- c) :* PcQ // b
-			dTi_Xk[3,.] = 1 :- (f_PiXk_matrix[I,.] :- c) :/ (1 :- c) // c
+		if(if_dEik){
+			// derivatives necessary to obtain the gradient
+			a = parameters_g[I,1]
+			b = parameters_g[I,2]
+			if(model_curr_asked_g[I,1] != "3plm"){
+				dTi_Xk = J(2, K, .)
+				PQ = f_PiXk_matrix[I,.] :* (1 :- f_PiXk_matrix[I,.])
+				dTi_Xk[1,.] = (quadpts :- b) :* PQ // a
+				dTi_Xk[2,.] = -a :* PQ // b
+			}
+			else{
+				dTi_theta = J(3, K, .)
+				c = parameters_g[I,3]
+				PcQ = (f_PiXk_matrix[I,.] :- c) :* (1 :- f_PiXk_matrix[I,.])
+				dTi_Xk[1,.] = (quadpts :- b) :* PcQ // a
+				dTi_Xk[2,.] = -a :* (1 :- c) :* PcQ // b
+				dTi_Xk[3,.] = 1 :- (f_PiXk_matrix[I,.] :- c) :/ (1 :- c) // c
+			}
 		}
 
 		Sk_less=J(I+1,K,1)
@@ -6876,10 +6873,12 @@ mata:
 			N_Eik = rowsum(P_quadpts :* (f_PiXk_matrix[I,.] :* Sk_less[i,.]) )
 			D_Eik = Sk_all[i+1,.]
 			Eik[i] = N_Eik / D_Eik
-			for(p = 1; p <= rows(dTi_Xk); p++){
-				dN_Eik = rowsum(P_quadpts :* (dTi_Xk[p,.] :* Sk_less[i,.]))
-				dD_Eik = rowsum(P_quadpts :* (dTi_Xk[p,.] :* (Sk_less[i,] :- Sk_less[i+1,])))
-				dEik[i,p] = ( D_Eik * dN_Eik - N_Eik * dD_Eik) /  D_Eik^2
+			if(if_dEik){
+				for(p = 1; p <= rows(dTi_Xk); p++){
+					dN_Eik = rowsum(P_quadpts :* (dTi_Xk[p,.] :* Sk_less[i,.]))
+					dD_Eik = rowsum(P_quadpts :* (dTi_Xk[p,.] :* (Sk_less[i,] :- Sk_less[i+1,])))
+					dEik[i,p] = ( D_Eik * dN_Eik - N_Eik * dD_Eik) /  D_Eik^2
+				}
 			}
 		}
 
@@ -6887,9 +6886,10 @@ mata:
 		Eik = 0\Eik\1
 		dEik = J(1,cols(dEik),0)\dEik\J(1,cols(dEik),0)
 		
-		results=J(2,1,NULL)
+		results=J(3,1,NULL)
 		results[1]=return_pointer(Eik) // not multiplied by Nk
-		results[2]=return_pointer(dEik) // not multiplied by sqrt(Nk)
+		results[2]=return_pointer(Sk_all) // not multiplied by Nk
+		results[3]=return_pointer(dEik) // not multiplied by sqrt(Nk)
 		return(results)
 
 	}
