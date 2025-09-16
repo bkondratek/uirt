@@ -6713,8 +6713,10 @@ mata:
 
 			long_final_estimates=create_long_vector(Q,Gx,"pars")
 			N_par=rows(long_final_estimates)
-			Cns_matrix=create_long_Cns_matrix(Q,Gx)
+			Cns_matrix=create_long_Cns_matrix(Q,Gx)[.,1..N_par]
 			Cns_ind = colsum(lowertriangle(Cns_matrix'*Cns_matrix))
+			rasch_ind= (colsum(Cns_matrix) :- Cns_ind):!=0
+			rasch_idx = select((1::N_par),rasch_ind')
 			if(N_par!=rows(v_i_range)){
 				for(par=1;par<=N_par;par++){
 					if(!anyof(v_i_range,par)){
@@ -6737,27 +6739,39 @@ mata:
 			Long_gradient_matrix = J(n_sc,N_par,0)
 			for(h=1;h<=rows(perturb_by);h++){
 				for(par=1;par<=N_par;par++){
-					if(Cns_ind[par]==0){ // skip fixed parameters; we will run into problems when dealing with - TDL: incorporate contraints
+					if(Cns_ind[par]==0){ // skip fixed parameters + quick 1PL treatment fix
 
-							long_final_estimates_par			= long_final_estimates
-							long_final_estimates_par[par]		= long_final_estimates_par[par]+perturb_by[h]
+						long_final_estimates_par		= long_final_estimates
+						if(anyof(rasch_idx,par)){
+							long_final_estimates_par[rasch_idx]	= long_final_estimates_par[rasch_idx]:+perturb_by[h]
+						}
+						else{
+							long_final_estimates_par[par]		= long_final_estimates_par[par]:+perturb_by[h]
+						}
 
-							Qpar.put(Qpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,0))
+						Qpar.put(Qpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,0))
 
-							Gpar.put(Gpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,1))
+						Gpar.put(Gpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,1))
 
-							LW_results = sx2_lord_wingersky(Qpar, Gpar,  item_for_fit, sx2_control)
-							Eik_full_pert = *LW_results[1]
-							PSk_full_pert = *LW_results[2]
-							Eik_pert = J(n_sc,1,.)
-							for (i = 1; i <= n_sc; i++) {
-								i1 = score_range[i, 1] + 1
-								i2 = score_range[i, 2] + 1
-								w = PSk_full_pert[i1::i2]
-								Eik_pert[i] = (Eik_full_pert[i1::i2]' * w / sum(w))
-							}
+						LW_results = sx2_lord_wingersky(Qpar, Gpar,  item_for_fit, sx2_control)
+						Eik_full_pert = *LW_results[1]
+						PSk_full_pert = *LW_results[2]
+						Eik_pert = J(n_sc,1,.)
+						for (i = 1; i <= n_sc; i++) {
+							i1 = score_range[i, 1] + 1
+							i2 = score_range[i, 2] + 1
+							w = PSk_full_pert[i1::i2]
+							Eik_pert[i] = (Eik_full_pert[i1::i2]' * w / sum(w))
+						}
 
-							Long_gradient_matrix[.,par]=  Long_gradient_matrix[.,par] :+ multiply_by[h] :* Eik_pert
+					//	if(anyof(rasch_idx,par)){
+					//		for(i=1;i<=rows(rasch_idx);i++){
+					//			Long_gradient_matrix[.,rasch_idx[i]]=  Long_gradient_matrix[.,rasch_idx[i]] :+ multiply_by[h] :* Eik_pert
+					//		}
+					//	}
+					//	else{
+							Long_gradient_matrix[.,par]=  Long_gradient_matrix[.,par] :+ multiply_by[h] :* Eik_pert // fine for 1PL as other a pars have zeros in e(V)
+					//	}
 					}
 				}
 			}
