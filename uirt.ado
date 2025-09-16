@@ -1024,7 +1024,7 @@ syntax [varlist] [if] [in] [, GRoup(str asis)  pcm(varlist) gpcm(varlist) GUEssi
 		}	
 		
 
-		m: sx2_control=J(2,1,.)
+		m: sx2_control=J(6,1,.)
 		if("`sx2_minfreq'"==""){
 			m: sx2_control[1]=1
 		}
@@ -1037,6 +1037,11 @@ syntax [varlist] [if] [in] [, GRoup(str asis)  pcm(varlist) gpcm(varlist) GUEssi
 		else{
 			m: sx2_control[2]=`sx2_bins'
 		}
+		m: sx2_control[3]=1 // if_gradient_all
+		m: sx2_control[4]=1 // if_include_extreme
+		m: sx2_control[5]=1 // if_weight_exp
+		m: sx2_control[6]=0 // if_analytical_dEik <- only if if_gradient_all==0
+
 
 
 
@@ -6386,12 +6391,7 @@ mata:
 	}
 
 // FIT functions
-	void SX2(_Q, _Gx, real matrix sx2_control, pointer matrix point_Uigc, pointer matrix point_Fg, real matrix V){
-
-		class ITEMS scalar Q
-		Q=_Q
-		class GROUPS scalar Gx
-		Gx=_Gx
+	void SX2(class ITEMS scalar Q, class GROUPS scalar Gx, real matrix sx2_control, pointer matrix point_Uigc, pointer matrix point_Fg, real matrix V){
 
 		I=Q.n
 		item_indx=select((1::I),Q.get(Q.fit_sx2,.))
@@ -6402,16 +6402,30 @@ mata:
 		sx2_S_Nik_results = sx2_S_Nik(Q.get(Q.viable_sx2,.), point_Uigc, point_Fg)
 		S = *sx2_S_Nik_results[1]
 		Nik_obs = *sx2_S_Nik_results[2]
-		
+
 		for(i=1;i<=I_fit;i++){
 
-			ifdEik_i=0
-			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i], ifdEik_i)
+			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i], sx2_control)
 			Eik_i_full=*LW_results[1]
 			PSk_full = *LW_results[2]
+			if(sx2_control[6]){ // if_analytical_dEik, used only if sx2_control[3]==0
+				dEik_i=*LW_results[3]
+			}
 
-			Nik_exp = sum(Nik_obs)*PSk_full
-			collapse_cats_results=sx2_collapse_cats(Eik_i_full,Nik_exp,sx2_control)
+			if(sx2_control[4]){ // if_include_extreme
+				Nik_exp = sum(Nik_obs)*PSk_full
+			}
+			else{
+				// TDL add code to handle exclusion of extreme observations
+			}
+
+			if(sx2_control[5]){ // if_weight_exp
+				collapse_cats_results=sx2_collapse_cats(Eik_i_full,Nik_exp,sx2_control)
+			}
+			else{
+				// TDL add code to handle weighting by observed instead of expected cell counts
+				// collapse_cats_results=sx2_collapse_cats(Eik_i_full,Nik_obs,sx2_control)
+			}
 			Eik_i=*collapse_cats_results[1]
 			score_range=*collapse_cats_results[2]
 			min_np_nq = min (	( *collapse_cats_results[4] , *collapse_cats_results[5] ) )
@@ -6423,15 +6437,21 @@ mata:
 				Nik_obs_i[ii] = sum(Nik_obs[i1::i2])
 			}
 
-			dEik_i = differentiate_Eik_collapsed(Q, Gx, item_indx[i], score_range)
+			if(sx2_control[3]){ // if_gradient_all
+				v_i_range = (1::rows(V))
+				dEik_i = differentiate_Eik(Q, Gx, item_indx[i], score_range, v_i_range, sx2_control)
+				v_i = V
+			}
+			else{
+				v_i_range = select((1::rows(V)), V_rownames[.,1]:== Q.get(Q.names,item_indx[i]))
+				if(sx2_control[6]==0){ // if_analytical_dEik
+					dEik_i = differentiate_Eik(Q, Gx, item_indx[i], score_range, v_i_range, sx2_control)
+				}
+				v_i = V[v_i_range,v_i_range'] // TDL - work out the 1plm case (the issue with common a estimated as sd, and error transfered to the 1st item)
+			}
 
 			dEik_i = sqrt(Nik_obs_i :/ (Eik_i:*(1:-Eik_i))) :* dEik_i
-
-	//		v_i_range = select((1::rows(V)), V_rownames[.,1]:== Q.get(Q.names,item_indx[i])) // we are assuming par order is fixed (as for now - it is)
-	//		v_i = V[v_i_range,v_i_range'] // TDL - work out the 1plm case (the issue with common a estimated as sd, and error transfered to the 1st item)
-	//		cov_SX2_i = I(rows(dEik_i)) - dEik_i*v_i*dEik_i'
-			cov_SX2_i = I(rows(dEik_i))- dEik_i*V*dEik_i'
-
+			cov_SX2_i = I(rows(dEik_i)) - dEik_i*v_i*dEik_i'
 			n_est_par	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
 
 			SX2_item_results	=	sx2_orlando_thissen(item_indx[i], Eik_i, Nik_obs_i, score_range, S, n_est_par, point_Uigc, point_Fg, cov_SX2_i)
@@ -6610,7 +6630,7 @@ mata:
 
 
 
-	pointer sx2_collapse_cats(real matrix Eik, real matrix Nik, real matrix sx2_control){
+	pointer sx2_collapse_cats(real matrix Eik, real matrix Nik, real colvector sx2_control){
 
 		// Weights are assumed to sum up to N here
 
@@ -6689,17 +6709,19 @@ mata:
 		return(results)
 	}
 
-		real matrix differentiate_Eik_collapsed(_Q, _Gx, real scalar item_for_fit, real matrix score_range){
-
-			class ITEMS scalar Q
-			Q=_Q
-			class GROUPS scalar Gx
-			Gx=_Gx
+		real matrix differentiate_Eik(class ITEMS scalar Q, class GROUPS scalar Gx, real scalar item_for_fit, real matrix score_range, real colvector v_i_range, real colvector sx2_control){
 
 			long_final_estimates=create_long_vector(Q,Gx,"pars")
 			N_par=rows(long_final_estimates)
 			Cns_matrix=create_long_Cns_matrix(Q,Gx)
 			Cns_ind = colsum(lowertriangle(Cns_matrix'*Cns_matrix))
+			if(N_par!=rows(v_i_range)){
+				for(par=1;par<=N_par;par++){
+					if(!anyof(v_i_range,par)){
+						Cns_ind[par]=-1 // effectively skip when explicitly limiting the range of parameters in v_i_range
+					}
+				}
+			}
 
 			class ITEMS scalar Qpar
 			class GROUPS scalar Gpar
@@ -6724,7 +6746,7 @@ mata:
 
 							Gpar.put(Gpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,1))
 
-							LW_results = sx2_lord_wingersky(Qpar, Gpar,  item_for_fit, 0)
+							LW_results = sx2_lord_wingersky(Qpar, Gpar,  item_for_fit, sx2_control)
 							Eik_full_pert = *LW_results[1]
 							PSk_full_pert = *LW_results[2]
 							Eik_pert = J(n_sc,1,.)
@@ -6742,58 +6764,15 @@ mata:
 
 			Long_gradient_matrix = Long_gradient_matrix :/ (2*perturbation)
 
-			return(Long_gradient_matrix)
-
-	}
-
-	real matrix differentiate_Eik(_Q, _Gx, real scalar item_for_fit, real scalar n_sc){
-
-			class ITEMS scalar Q
-			Q=_Q
-			class GROUPS scalar Gx
-			Gx=_Gx
-
-			long_final_estimates=create_long_vector(Q,Gx,"pars")
-			N_par=rows(long_final_estimates)
-			Cns_matrix=create_long_Cns_matrix(Q,Gx)
-			Cns_ind = colsum(lowertriangle(Cns_matrix'*Cns_matrix))
-
-			class ITEMS scalar Qpar
-			class GROUPS scalar Gpar
-			Qpar=cloneQ(Q)
-			Gpar=cloneG(Gx)
-
-			//perturbation = crit_par*10
-			perturbation = 10^-3
-			perturb_by=(perturbation,-perturbation)'
-			multiply_by=(1,-1)'
-
-			Long_gradient_matrix = J(n_sc,N_par,0)
-			for(h=1;h<=rows(perturb_by);h++){
-				for(par=1;par<=N_par;par++){
-					if(Cns_ind[par]==0){ // skip fixed parameters; we will run into problems when dealing with - TDL: incorporate contraints
-
-							long_final_estimates_par			= long_final_estimates
-							long_final_estimates_par[par]		= long_final_estimates_par[par]+perturb_by[h]
-
-							Qpar.put(Qpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,0))
-
-							Gpar.put(Gpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,1))
-
-							Eik_full = *sx2_lord_wingersky(Qpar, Gpar,  item_for_fit)[1]
-
-							Long_gradient_matrix[.,par]=  Long_gradient_matrix[.,par] :+ multiply_by[h] :* Eik_full
-					}
-				}
+			if(N_par!=rows(v_i_range)){
+				Long_gradient_matrix=Long_gradient_matrix[.,v_i_range]
 			}
 
-			Long_gradient_matrix = Long_gradient_matrix :/ (2*perturbation)
-
 			return(Long_gradient_matrix)
 
 	}
-		
-	pointer sx2_lord_wingersky(class ITEMS  scalar Q, class GROUPS scalar Gx, real scalar item_for_fit, real scalar if_dEik){
+
+	pointer sx2_lord_wingersky(class ITEMS  scalar Q, class GROUPS scalar Gx, real scalar item_for_fit, real colvector sx2_control){
 
 		I=Q.n
 		itemselectrange_g 	= select((1::I),Q.get(Q.viable_sx2,.))
@@ -6817,7 +6796,7 @@ mata:
 			}
 		}
 
-		if(if_dEik){
+		if(sx2_control[6]){
 			// derivatives necessary to obtain the gradient
 			a = parameters_g[I,1]
 			b = parameters_g[I,2]
@@ -6873,7 +6852,7 @@ mata:
 			N_Eik = rowsum(P_quadpts :* (f_PiXk_matrix[I,.] :* Sk_less[i,.]) )
 			D_Eik = Sk_all[i+1,.]
 			Eik[i] = N_Eik / D_Eik
-			if(if_dEik){
+			if(sx2_control[6]){
 				for(p = 1; p <= rows(dTi_Xk); p++){
 					dN_Eik = rowsum(P_quadpts :* (dTi_Xk[p,.] :* Sk_less[i,.]))
 					dD_Eik = rowsum(P_quadpts :* (dTi_Xk[p,.] :* (Sk_less[i,] :- Sk_less[i+1,])))
@@ -6883,9 +6862,11 @@ mata:
 		}
 
 		//adding 0 and max score entries
-		Eik = 0\Eik\1
-		dEik = J(1,cols(dEik),0)\dEik\J(1,cols(dEik),0)
-		
+		if(sx2_control[4]){
+			Eik = 0\Eik\1
+			dEik = J(1,cols(dEik),0)\dEik\J(1,cols(dEik),0)
+		}
+
 		results=J(3,1,NULL)
 		results[1]=return_pointer(Eik) // not multiplied by Nk
 		results[2]=return_pointer(Sk_all) // not multiplied by Nk
