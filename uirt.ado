@@ -2444,33 +2444,8 @@ mata:
 
 		// rescaling if pcm
 		if(sum(Q.get(Q.m_curr,.):=="pcm")>0 & G.get(G.cns,1)[1]==1 & G.get(G.cns,1)[2]==0){
-
-			sel_non3plm=select((1::Q.n) , (Q.get(Q.m_curr,.):!="3plm"))
-			Q.put(Q.pars,sel_non3plm,( Q.get(Q.pars,sel_non3plm)[.,1]*G.get(G.pars,1)[2] , Q.get(Q.pars,sel_non3plm)[.,2..max(Q.get(Q.n_par,sel_non3plm))]/G.get(G.pars,1)[2] ) )
-
-			sel_3plm=select((1::Q.n) , (Q.get(Q.m_curr,.):=="3plm"))
-			if(rows(sel_3plm)){
-				Q.put(Q.pars,sel_3plm,( Q.get(Q.pars,sel_3plm)[.,1]*G.get(G.pars,1)[2] , Q.get(Q.pars,sel_3plm)[.,2..max(Q.get(Q.n_par,sel_3plm))]/G.get(G.pars,1)[2] ) )
-			}
-
-			G.put(G.X_k,.,G.get(G.X_k,.)/G.get(G.pars,1)[2])
-			G.put(G.pars,.,G.get(G.pars,.)/G.get(G.pars,1)[2])
-
-			indexoffirstpcm=min(select((1::Q.n),Q.get(Q.m_curr,.):=="pcm"))
-			indexoffirstpcm=G.n*2+sum(Q.get(Q.n_par,(1::indexoffirstpcm)))-Q.get(Q.n_par,indexoffirstpcm)+1
-
-			Vtemp=V
-			Vtemp[.,2]=V[.,indexoffirstpcm]
-			Vtemp[.,indexoffirstpcm]=V[.,2]*G.get(G.pars,1)[2]
-			V=Vtemp
-			V[2,.]=Vtemp[indexoffirstpcm,.]
-			V[indexoffirstpcm,.]=Vtemp[2,.]*G.get(G.pars,1)[2]
-			Vtemp=J(0,0,.)
-			V=V/G.get(G.pars,1)[2]^2
-
-			G.put(G.cns,1,(1,1))
+			V = rescale_pcm_estimation(Q, G, V)
 			Cns_matrix=create_long_Cns_matrix(Q,G)
-
 		}
 
 		se=sqrt(diagonal(V))
@@ -2688,33 +2663,8 @@ mata:
 
 		// rescaling if pcm
 		if(sum(Q.get(Q.m_curr,.):=="pcm")>0 & G.get(G.cns,1)[1]==1 & G.get(G.cns,1)[2]==0){
-
-			sel_non3plm=select((1::Q.n) , (Q.get(Q.m_curr,.):!="3plm"))
-			Q.put(Q.pars,sel_non3plm,( Q.get(Q.pars,sel_non3plm)[.,1]*G.get(G.pars,1)[2] , Q.get(Q.pars,sel_non3plm)[.,2..max(Q.get(Q.n_par,sel_non3plm))]/G.get(G.pars,1)[2] ) )
-
-			sel_3plm=select((1::Q.n) , (Q.get(Q.m_curr,.):=="3plm"))
-			if(rows(sel_3plm)){
-				Q.put(Q.pars,sel_3plm,( Q.get(Q.pars,sel_3plm)[.,1]*G.get(G.pars,1)[2] , Q.get(Q.pars,sel_3plm)[.,2..max(Q.get(Q.n_par,sel_3plm))]/G.get(G.pars,1)[2] ) )
-			}
-
-			G.put(G.X_k,.,G.get(G.X_k,.)/G.get(G.pars,1)[2])
-			G.put(G.pars,.,G.get(G.pars,.)/G.get(G.pars,1)[2])
-
-			indexoffirstpcm=min(select((1::Q.n),Q.get(Q.m_curr,.):=="pcm"))
-			indexoffirstpcm=G.n*2+sum(Q.get(Q.n_par,(1::indexoffirstpcm)))-Q.get(Q.n_par,indexoffirstpcm)+1
-
-			Vtemp=V
-			Vtemp[.,2]=V[.,indexoffirstpcm]
-			Vtemp[.,indexoffirstpcm]=V[.,2]*G.get(G.pars,1)[2]
-			V=Vtemp
-			V[2,.]=Vtemp[indexoffirstpcm,.]
-			V[indexoffirstpcm,.]=Vtemp[2,.]*G.get(G.pars,1)[2]
-			Vtemp=J(0,0,.)
-			V=V/G.get(G.pars,1)[2]^2
-
-			G.put(G.cns,1,(1,1))
+			V = rescale_pcm_estimation(Q, G, V)
 			Cns_matrix=create_long_Cns_matrix(Q,G)
-
 		}
 
 		se=sqrt(diagonal(V))
@@ -2884,6 +2834,80 @@ mata:
 		return(dif_results)
 	}
 
+	real matrix rescale_pcm_estimation(class ITEMS scalar Q, class GROUPS scalar G, real matrix V){
+
+		indexoffirstpcm = min(select((1::Q.n),Q.get(Q.m_curr,.):=="pcm"))
+		indexoffirstpcm = G.n*2+sum(Q.get(Q.n_par,(1::indexoffirstpcm)))-Q.get(Q.n_par,indexoffirstpcm)+1
+
+		_pars=create_long_vector(Q,G,"pars")
+		_pars_rescaled=_pars
+		N_par = rows(_pars)
+
+		parnames = create_long_vector_pars_colnames(Q, G, N_par)'[.,2]
+		i_mu  = selectindex(strpos(parnames,"mean_theta"):> 0)
+		i_sd  = selectindex(strpos(parnames,"sd_theta"):> 0)
+		idx_a = selectindex(strpos(parnames, "_a") :> 0)
+		idx_b = selectindex(strpos(parnames, "_b") :> 0)
+		idx_c = selectindex(strpos(parnames, "_c") :> 0)
+
+		i_the_sd = min(i_sd)
+		the_sd = _pars[i_the_sd]
+		the_a = _pars[indexoffirstpcm]
+
+		JV = J( N_par, N_par, 0 )
+
+		for(i=1; i<=N_par; i++){
+			if(anyof(i_mu,i)){
+
+				_pars_rescaled[i]	= _pars[i]/the_sd
+
+				JV[i, i]		=  1/the_sd
+				JV[i, i_the_sd]		= -_pars[i] / the_sd^2
+			} else if (anyof(i_sd,i)) {
+
+				_pars_rescaled[i]	= _pars[i]/the_sd
+
+				if (i == i_the_sd) {
+					_pars_rescaled[i] = 1
+				} else  {
+					_pars_rescaled[i]	= _pars[i] / the_sd
+					JV[i, i]		=  1/the_sd
+					JV[i, i_the_sd]		= -_pars[i] / the_sd^2
+				}
+			}
+			 else if (anyof(idx_a,i)) {
+
+				_pars_rescaled[i]	= _pars[i]*the_sd
+
+				 if (i == indexoffirstpcm) {
+					JV[i, i]      	= the_sd
+					JV[i, i_the_sd] = _pars[i]
+				}
+			}
+			 else if (anyof(idx_b,i)) {
+
+				_pars_rescaled[i]	= _pars[i]/the_sd
+
+				JV[i, i]		=  1/the_sd
+				JV[i, i_the_sd]		= -_pars[i] / the_sd^2
+			}
+
+			else if (anyof(idx_c, i)) {
+
+				_pars_rescaled[i] = _pars[i]
+
+				JV[i, i] = 1 // unchanged, keeping original variance
+			}
+		}
+
+		Q.put(Q.pars,.,uncreate_long_vector(Q, G, _pars_rescaled,0))
+		G.put(G.pars,.,uncreate_long_vector(Q, G, _pars_rescaled,1))
+		G.put(G.cns,1,(1,1))
+
+		// Compute transformed covariance
+		V = JV * V * JV'
+		return(V)
+	}
 
 
 	function create_long_vector(_Q, _G, string scalar what){
