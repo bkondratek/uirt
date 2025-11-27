@@ -2084,7 +2084,8 @@ mata:
 			// st_matrixcolstripe("item_fit_SX2", (J(4,1,""),("SX2","p-val","df","n_par")'))
 			// below are temporary names for research, if last columns are missing they are not returned from Q.get, so a workaround for fixed output
 			// _temp_colnames = (J(9,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","trace_cov","p-val_SX_W_df")')
-			_temp_colnames = (J(10,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","trace_cov","p-val_SX_W_df","min_np_nq")')
+			// _temp_colnames = (J(10,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","trace_cov","p-val_SX_W_df","min_np_nq")')
+			_temp_colnames = (J(11,1,""),("SX2","p-val","df","n_par",   "p-val_cv","c","v",  "SX2_W","p-val_W", "df_W","min_np_nq")')
 			_res_n_cols = cols(st_matrix("item_fit_SX2"))
 			_res_n_rows = rows(st_matrix("item_fit_SX2"))
 			if( _res_n_cols != rows(_temp_colnames) ){
@@ -6481,10 +6482,10 @@ mata:
 			SX2_item_results	=	sx2_orlando_thissen(item_indx[i], Eik_i, Nik_obs_i, score_range, S, n_est_par, point_Uigc, point_Fg, cov_SX2_i)
 
 			// Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par) )
-			// st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","trace_cov","p-val_SX_W_df")'))
+			// st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par",   "p-val_cv","c","v",  "SX2_W","p-val_W", "df_W")'))
 			Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par,
 			*SX2_item_results[6],*SX2_item_results[7],*SX2_item_results[8],
-			*SX2_item_results[9],*SX2_item_results[10], min_np_nq) )
+			*SX2_item_results[9],*SX2_item_results[10],*SX2_item_results[11], min_np_nq) )
 		}
 
 	}
@@ -6512,27 +6513,42 @@ mata:
 		df=rows(Eik)-n_est_par
 		pvalue=(1:-chi2(df,SX2))
 
-		SX2_W= Rik'*cov_SX2*Rik
-		trace_cov2 = trace(cov_SX2*cov_SX2)
-		df_W = trace_cov2 // !!!!!!!
-		pvalue_W=( 1:-chi2(df_W,SX2_W))
-
-		pvalue_SX_W_df = (1:-chi2(df,SX2_W))
+		// mean-variance pv-value approximation
 		trace_cov=trace(cov_SX2)
+		trace_cov2 = trace(cov_SX2*cov_SX2)
+		c_df = trace_cov2/trace_cov
+		v_df = trace_cov^2/trace_cov2
+		pvalue_cv=( 1:-chi2(v_df,SX2/c_df)) // !!!!!!!
+
+		// standardised statistic
+		cov_SX2=(makesymmetric(cov_SX2):+makesymmetric(cov_SX2')):/2
+		cov_invers= invsym(cov_SX2)
+		if(rank(cov_invers)==rows(Eik)){ // only positive definite, skipping a generalized inverse
+			SX2_W= Rik'*cov_invers*Rik
+			df_SX2_W = rank(cov_invers)
+			pvalue_W=( 1:-chi2(df_SX2_W,SX2_W))
+		}
+		else{
+			SX2_W= .
+			df_SX2_W = .
+			pvalue_W= .
+		}
 
 		results=J(11,1,NULL)
 		results[1]=return_pointer(SX2)
 		results[2]=return_pointer(pvalue)
 		results[3]=return_pointer(df)
+
 		results[4]=return_pointer(Oik)
 		results[5]=return_pointer(Nik)
 
-		results[6]=return_pointer(SX2_W)
-		results[7]=return_pointer(pvalue_W)
-		results[8]=return_pointer(df_W)
+		results[6]=return_pointer(pvalue_cv)
+		results[7]=return_pointer(c_df)
+		results[8]=return_pointer(v_df)
 
-		results[9]=return_pointer(trace_cov)
-		results[10]=return_pointer(pvalue_SX_W_df)
+		results[9]=return_pointer(SX2_W)
+		results[10]=return_pointer(pvalue_W)
+		results[11]=return_pointer(df_SX2_W)
 
 		return(results)
 	
