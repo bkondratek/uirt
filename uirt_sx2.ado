@@ -28,6 +28,7 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 		
 		if("`varlist'"=="" & "`minfreq'"=="" & `if_sx2'){
 			mat temp=e(item_fit_SX2)
+			mat temp_rev=e(item_fit_SX2_rev)
 		}
 		else{
 			if("`postest'"=="sx2()"){
@@ -39,6 +40,7 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 			
 			m: stata("`e(cmdstrip)' `postest' fix(prev used) err(stored) nit(0) tr(0) not noh")
 			mat temp=e(item_fit_SX2)
+			mat temp_rev=e(item_fit_SX2_rev)
 			
 			m: stata("qui estimates restore "+backup_e)
 			m: stata("qui estimates drop "+backup_e)
@@ -48,7 +50,9 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 		local ncol_temp=colsof(temp)
 		if(`ncol_temp'>1){
 			m: _display_matrix_as_table("temp",decimals)
+			m: _display_matrix_as_table("temp_rev",decimals)
 			return matrix item_fit_SX2 temp 
+			return matrix item_fit_SX2_rev temp_rev 
 		}		
 		
 	}

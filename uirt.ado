@@ -1,6 +1,6 @@
 *uirt.ado 
 *ver 2.3.0
-*2025.08.13
+*2026.03.27
 *everythingthatcounts@gmail.com
 
 capture prog drop uirt
@@ -1494,7 +1494,7 @@ mata:
 
 	class ITEMS{
 		public:
-			real scalar names, m_curr ,m_asked ,fix, init, pars ,n_cat , n_par, n_par_model, n_fix, n_init, cns, n_cns, p_cat, g_tot, init_fail, warning_cats, fit_sx2, viable_sx2, delta, a_prior, b_prior, c_prior, se, chi2W_res, SX2_res, par_labs
+			real scalar names, m_curr ,m_asked ,fix, init, pars ,n_cat , n_par, n_par_model, n_fix, n_init, cns, n_cns, p_cat, g_tot, init_fail, warning_cats, fit_sx2, viable_sx2, delta, a_prior, b_prior, c_prior, se, chi2W_res, SX2_res, SX2_rev_res, par_labs
 			real scalar n_prop
 			real scalar n
 			pointer vector ITEMS_DATA
@@ -1531,9 +1531,10 @@ mata:
 		se=24
 		chi2W_res=25
 		SX2_res=26
-		par_labs=27
+		SX2_rev_res=27
+		par_labs=28
 
-		n_prop=27
+		n_prop=28
 	}
 
 	void ITEMS::populate(string colvector namevec){
@@ -1569,7 +1570,8 @@ mata:
 
 			put(chi2W_res,.,J(n,1,.))
 			put(SX2_res,.,J(n,1,.))
-
+			put(SX2_rev_res,.,J(n,1,.))
+			
 			put(par_labs,.,J(n,1,""))
 
 			put(p_cat,.,J(n,1,NULL))
@@ -1600,7 +1602,7 @@ mata:
 		if(where==.){
 			where=(1::rows(ITEMS_DATA))
 		}
-		if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,par_labs)) ){
+		if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,SX2_rev_res,par_labs)) ){
 			if(what==par_labs){
 				empty=""
 			}
@@ -1636,7 +1638,7 @@ mata:
 			where=(1::rows(ITEMS_DATA))
 		}
 		for(i=1;i<=rows(where);i++){
-			if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,par_labs)) ){
+			if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,SX2_rev_res,par_labs)) ){
 				if(cols(contents[i,.])){
 					if(what==par_labs){
 						empty=""
@@ -1648,7 +1650,7 @@ mata:
 					temp=(*ITEMS_DATA[where[i]])[n_par_model]
 					if(temp!=NULL){
 					    temp=*temp
-    					if( sum(what:==(a_prior,b_prior,c_prior,chi2W_res,SX2_res,par_labs))==0 & temp!=. ){
+    					if( sum(what:==(a_prior,b_prior,c_prior,chi2W_res,SX2_res,SX2_rev_res,par_labs))==0 & temp!=. ){
 							max_col=min((temp,cols(contents[i,.])))
 						}
 					}
@@ -2093,6 +2095,16 @@ mata:
 			}
 			st_matrixcolstripe("item_fit_SX2",_temp_colnames )
 			st_matrixrowstripe("item_fit_SX2", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
+			
+			st_matrix("item_fit_SX2_rev",Q.get(Q.SX2_rev_res,fit_indx))
+			_temp_colnames = (J(11,1,""),("SX2_rev","p-val","df","n_par",   "p-val_cv","c","v",  "SX2_rev_W","p-val_W", "df_W","min_nq")')
+			_res_n_cols = cols(st_matrix("item_fit_SX2_rev"))
+			_res_n_rows = rows(st_matrix("item_fit_SX2_rev"))
+			if( _res_n_cols != rows(_temp_colnames) ){
+				st_matrix( "item_fit_SX2_rev", ( st_matrix("item_fit_SX2_rev"),J(_res_n_rows, rows(_temp_colnames)-_res_n_cols, .) ))
+			}
+			st_matrixcolstripe("item_fit_SX2_rev",_temp_colnames )
+			st_matrixrowstripe("item_fit_SX2_rev", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
 
 		}
 
@@ -2150,6 +2162,7 @@ mata:
 
 	if(sum(Q.get(Q.fit_sx2,.))>0){
 		stata("ereturn matrix item_fit_SX2 item_fit_SX2")
+		stata("ereturn matrix item_fit_SX2_rev item_fit_SX2_rev")
 	}
 
 	if(pvreg!="."){
@@ -6427,90 +6440,94 @@ mata:
 		sx2_S_Nik_results = sx2_S_Nik(Q.get(Q.viable_sx2,.), point_Uigc, point_Fg)
 		S = *sx2_S_Nik_results[1]
 		Nik_obs = *sx2_S_Nik_results[2]
+		N_obs = sum(Nik_obs)
 
 		for(i=1;i<=I_fit;i++){
 
 			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i], sx2_control)
-			Eik_i_full=*LW_results[1]
-			PSk_full = *LW_results[2]
-			if(sx2_control[6]){ // if_analytical_dEik, used only if sx2_control[3]==0
-				dEik_i=*LW_results[3]
-			}
-
-			if(sx2_control[4]){ // if_include_extreme
-				Nik_exp = sum(Nik_obs)*PSk_full
-			}
-			else{
-				// TDL add code to handle exclusion of extreme observations
-			}
-
-			if(sx2_control[5]){ // if_weight_exp
-				collapse_cats_results=sx2_collapse_cats(Eik_i_full,Nik_exp,sx2_control)
-			}
-			else{
-				// TDL add code to handle weighting by observed instead of expected cell counts
-				// collapse_cats_results=sx2_collapse_cats(Eik_i_full,Nik_obs,sx2_control)
-			}
-			Eik_i=*collapse_cats_results[1]
-			score_range=*collapse_cats_results[2]
-			min_np_nq = min (	( *collapse_cats_results[4] , *collapse_cats_results[5] ) )
-
-			Nik_obs_i = J(rows(score_range),1,.)
-			for (ii = 1; ii <= rows(score_range); ii++) {
-				i1 = score_range[ii, 1] + 1
-				i2 = score_range[ii, 2] + 1
-				Nik_obs_i[ii] = sum(Nik_obs[i1::i2])
-			}
-
+			//Eik = *LW_results[1]
+			//PSk = *LW_results[2]
+						
 			if(sx2_control[3]){ // if_gradient_all
 				v_i_range = (1::rows(V))
-				dEik_i = differentiate_Eik(Q, Gx, item_indx[i], score_range, v_i_range, sx2_control)
+				differentiate_EikPSk_results = differentiate_EikPSk(Q, Gx, item_indx[i], rows(*LW_results[1]), v_i_range, sx2_control)
 				v_i = V
 			}
 			else{
 				v_i_range = select((1::rows(V)), V_rownames[.,1]:== Q.get(Q.names,item_indx[i]))
 				if(sx2_control[6]==0){ // if_analytical_dEik
-					dEik_i = differentiate_Eik(Q, Gx, item_indx[i], score_range, v_i_range, sx2_control)
+					differentiate_EikPSk_results = differentiate_EikPSk(Q, Gx, item_indx[i], rows(*LW_results[1]), v_i_range, sx2_control)
 				}
 				v_i = V[v_i_range,v_i_range'] // TDL - work out the 1plm case (the issue with common a estimated as sd, and error transfered to the 1st item)
 			}
+			
 
-			dEik_i = sqrt(Nik_obs_i :/ (Eik_i:*(1:-Eik_i))) :* dEik_i
-			cov_SX2_i = I(rows(dEik_i)) - dEik_i*v_i*dEik_i'
+			if(sx2_control[5]){ // if_weight_exp
+				collapse_cats_results=sx2_collapse_cats(Nik_obs, LW_results, differentiate_EikPSk_results,sx2_control)
+			}
+			else{
+				// TDL add code to handle weighting by observed instead of expected cell counts
+				// collapse_cats_results=sx2_collapse_cats(Eik_i_full,Nik_obs,sx2_control)
+			}
+			
+			Eik_collapsed			= *collapse_cats_results[1]
+			score_range				= *collapse_cats_results[2]
+			min_np_nq 				= min (	( *collapse_cats_results[4] , *collapse_cats_results[5] ) )
+			Nik_obs_collapsed 		= *collapse_cats_results[6]
+			PSk_collapsed 			= *collapse_cats_results[7]
+			Eik_Jacobian_collapsed	= *collapse_cats_results[8]
+			PSk_Jacobian_collapsed	= *collapse_cats_results[9]
+			
+			
+			sx2_observed_counts_results = sx2_observed_counts(item_indx[i], Nik_obs_collapsed, score_range, S, point_Uigc, point_Fg)
+			Oik = *sx2_observed_counts_results[1]
+			Qik = *sx2_observed_counts_results[2]
+			
+			dRik = ( - (Oik :* (1 :- 2 * Eik_collapsed) :+ Nik_obs_collapsed :* Eik_collapsed ) 
+						:/
+						(2 * sqrt(Nik_obs_collapsed) :* (Eik_collapsed:*(1 :- Eik_collapsed)):^1.5 ) ) :* Eik_Jacobian_collapsed
+						
+
+			cov_SX2 = I(rows(dRik)) - dRik*v_i*dRik' // test quadcross later
+			
 			n_est_par	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
-
-			SX2_item_results	=	sx2_orlando_thissen(item_indx[i], Eik_i, Nik_obs_i, score_range, S, n_est_par, point_Uigc, point_Fg, cov_SX2_i)
-
+			
+			SX2_item_results	=	sx2_orlando_thissen(Oik, Eik_collapsed, Nik_obs_collapsed , n_est_par, cov_SX2)
+			
 			// Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par) )
 			// st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par",   "p-val_cv","c","v",  "SX2_W","p-val_W", "df_W")'))
 			Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par,
 			*SX2_item_results[6],*SX2_item_results[7],*SX2_item_results[8],
-			*SX2_item_results[9],*SX2_item_results[10],*SX2_item_results[11], min_np_nq) )
+			*SX2_item_results[9],*SX2_item_results[10],*SX2_item_results[11], min_np_nq ) )
+			
+			
+			//revised SX2
+			qik = (Eik_collapsed :* PSk_collapsed) \ ( (1:-Eik_collapsed) :* PSk_collapsed)
+			
+			dRik_rev = ( - (Qik :+ N_obs :* qik) :/ (2 * sqrt(N_obs) :* qik :^1.5) ) :* (																						
+			( Eik_collapsed :* PSk_Jacobian_collapsed :+ PSk_collapsed :* Eik_Jacobian_collapsed ) \  ( (1 :- Eik_collapsed) :* PSk_Jacobian_collapsed  :- PSk_collapsed :* Eik_Jacobian_collapsed ) )
+																						
+			qik_sqrt = sqrt(qik)							
+			cov_SX2_rev = I(rows(dRik_rev)) -qik_sqrt*qik_sqrt'- dRik_rev*v_i*dRik_rev' // test quadcross later	
+			
+			SX2_rev_item_results	=	sx2_revised(Qik, qik, N_obs , n_est_par, cov_SX2_rev)	
+			
+			Q.put(Q.SX2_rev_res, item_indx[i], (*SX2_rev_item_results[1],*SX2_rev_item_results[2],*SX2_rev_item_results[3],n_est_par,
+			*SX2_rev_item_results[6],*SX2_rev_item_results[7],*SX2_rev_item_results[8],
+			*SX2_rev_item_results[9],*SX2_rev_item_results[10],*SX2_rev_item_results[11], min(N_obs * qik )) )
+			
+			
 		}
 
 	}
-
-
-	pointer sx2_orlando_thissen(real scalar item_for_fit, real matrix Eik, real matrix Nik, real matrix score_range, real matrix S, real scalar n_est_par, pointer matrix point_Uigc, pointer matrix point_Fg, real matrix cov_SX2){
-
-		obs_i=J(rows(*point_Fg[1]),1,0)
-		ord_ic = (*(*point_Uigc[item_for_fit,1])[2])
-		if(rows(ord_ic)){
-			obs_i[ord_ic]=J(rows(ord_ic),1,1)
-		}
-
-		Oik=J(rows(Eik),1,0)
-		Rik=J(rows(Eik),1,0)
-		for(i=1;i<=rows(Eik);i++){
-			sel_i=select((1::rows(obs_i)), (S:>=score_range[i,1] ):* (S:<=score_range[i,2] ))
-			if(rows(sel_i)){
-				Oik[i]=cross( (*point_Fg[1])[sel_i] , obs_i[sel_i])
-				Rik[i]=(Oik[i]-Nik[i]*Eik[i])/sqrt(Nik[i]*Eik[i]*(1-Eik[i])) // we defined O and E on the observed count scale, but it is the same
-			}
-		}
+	
+	
+	pointer sx2_revised(real matrix Qik, real matrix qik, real scalar N_obs, real scalar n_est_par, real matrix cov_SX2){
 		
-		SX2= cross(Rik,Rik) //previous, using proportions: SX2=sum(( Nik:*(Oik:-Eik):*(Oik:-Eik)):/(Eik:*(1:-Eik)))
-		df=rows(Eik)-n_est_par
+		Rik = (Qik:-N_obs:*qik):/sqrt(N_obs:*qik)
+		
+		SX2= cross(Rik,Rik) 
+		df=rows(Rik)-n_est_par - 1
 		pvalue=(1:-chi2(df,SX2))
 
 		// mean-variance pv-value approximation
@@ -6523,7 +6540,8 @@ mata:
 		// standardised statistic
 		cov_SX2=(makesymmetric(cov_SX2):+makesymmetric(cov_SX2')):/2
 		cov_invers= invsym(cov_SX2)
-		if(rank(cov_invers)==rows(Eik)){ // only positive definite, skipping a generalized inverse
+		//cov_invers= pinv(cov_SX2)
+		if(rank(cov_invers)==df + n_est_par){ // only if pseudoinverse rank matches fixed case structure
 			SX2_W= Rik'*cov_invers*Rik
 			df_SX2_W = rank(cov_invers)
 			pvalue_W=( 1:-chi2(df_SX2_W,SX2_W))
@@ -6554,6 +6572,155 @@ mata:
 	
 	}
 
+	
+	pointer sx2_orlando_thissen(real matrix Oik, real matrix Eik, real matrix Nik, real scalar n_est_par, real matrix cov_SX2){
+		
+		Rik = (Oik:-Nik:*Eik):/sqrt(Nik:*Eik:*(1:-Eik))
+		
+		SX2= cross(Rik,Rik) //previous, using proportions: SX2=sum(( Nik:*(Oik:-Eik):*(Oik:-Eik)):/(Eik:*(1:-Eik)))
+		df=rows(Eik)-n_est_par
+		pvalue=(1:-chi2(df,SX2))
+
+		// mean-variance pv-value approximation
+		trace_cov=trace(cov_SX2)
+		trace_cov2 = trace(cov_SX2*cov_SX2)
+		c_df = trace_cov2/trace_cov
+		v_df = trace_cov^2/trace_cov2
+		pvalue_cv=( 1:-chi2(v_df,SX2/c_df)) // !!!!!!!
+
+		// standardised statistic
+		cov_SX2=(makesymmetric(cov_SX2):+makesymmetric(cov_SX2')):/2
+		cov_invers= invsym(cov_SX2)
+		//cov_invers= pinv(cov_SX2)
+		if(rank(cov_invers)==df + n_est_par){ // only if pseudoinverse rank matches fixed case structure
+			SX2_W= Rik'*cov_invers*Rik
+			df_SX2_W = rank(cov_invers)
+			pvalue_W=( 1:-chi2(df_SX2_W,SX2_W))
+		}
+		else{
+			SX2_W= .
+			df_SX2_W = .
+			pvalue_W= .
+		}
+
+		results=J(11,1,NULL)
+		results[1]=return_pointer(SX2)
+		results[2]=return_pointer(pvalue)
+		results[3]=return_pointer(df)
+
+		results[4]=return_pointer(Oik)
+		results[5]=return_pointer(Nik)
+
+		results[6]=return_pointer(pvalue_cv)
+		results[7]=return_pointer(c_df)
+		results[8]=return_pointer(v_df)
+
+		results[9]=return_pointer(SX2_W)
+		results[10]=return_pointer(pvalue_W)
+		results[11]=return_pointer(df_SX2_W)
+
+		return(results)
+	
+	}
+
+	
+	pointer differentiate_EikPSk(class ITEMS scalar Q, class GROUPS scalar Gx, real scalar item_for_fit, real scalar n_sc, real colvector v_i_range, real colvector sx2_control){
+
+		long_final_estimates=create_long_vector(Q,Gx,"pars")
+		N_par=rows(long_final_estimates)
+		Cns_matrix=create_long_Cns_matrix(Q,Gx)[.,1..N_par]
+		Cns_ind = colsum(lowertriangle(Cns_matrix'*Cns_matrix))
+		rasch_ind= (colsum(Cns_matrix) :- Cns_ind):!=0
+		rasch_idx = select((1::N_par),rasch_ind')
+		if(N_par!=rows(v_i_range)){
+			for(par=1;par<=N_par;par++){
+				if(!anyof(v_i_range,par)){
+					Cns_ind[par]=-1 // effectively skip when explicitly limiting the range of parameters in v_i_range
+				}
+			}
+		}
+
+		class ITEMS scalar Qpar
+		class GROUPS scalar Gpar
+		Qpar=cloneQ(Q)
+		Gpar=cloneG(Gx)
+
+		//perturbation = crit_par*10
+		perturbation = 10^-3
+		perturb_by=(perturbation,-perturbation)'
+		multiply_by=(1,-1)'
+
+		Eik_Jacobian = J(n_sc,N_par,0)
+		PSk_Jacobian = J(n_sc,N_par,0)
+		for(h=1;h<=rows(perturb_by);h++){
+			for(par=1;par<=N_par;par++){
+				if(Cns_ind[par]==0){ // skip fixed parameters + quick 1PL treatment fix
+
+					long_final_estimates_par		= long_final_estimates
+					if(anyof(rasch_idx,par)){
+						long_final_estimates_par[rasch_idx]	= long_final_estimates_par[rasch_idx]:+perturb_by[h]
+					}
+					else{
+						long_final_estimates_par[par]		= long_final_estimates_par[par]:+perturb_by[h]
+					}
+
+					Qpar.put(Qpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,0))
+					Gpar.put(Gpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,1))
+
+					LW_results = sx2_lord_wingersky(Qpar, Gpar,  item_for_fit, sx2_control)
+					Eik_pert = *LW_results[1]
+					PSk_pert = *LW_results[2]
+
+					// fine for 1PL as other a pars have zeros in e(V)
+					Eik_Jacobian[.,par]=  Eik_Jacobian[.,par] :+ multiply_by[h] :* Eik_pert
+					PSk_Jacobian[.,par]=  PSk_Jacobian[.,par] :+ multiply_by[h] :* PSk_pert
+					
+				}
+			}
+		}
+
+		Eik_Jacobian = Eik_Jacobian :/ (2*perturbation)
+		PSk_Jacobian = PSk_Jacobian :/ (2*perturbation)
+
+		if(N_par!=rows(v_i_range)){
+			Eik_Jacobian=Eik_Jacobian[.,v_i_range]
+			PSk_Jacobian=PSk_Jacobian[.,v_i_range]
+		}
+
+		results=J(2,1,NULL)
+		results[1]=return_pointer(Eik_Jacobian)
+		results[2]=return_pointer(PSk_Jacobian)
+		return(results)
+
+	}
+	
+
+	pointer sx2_observed_counts(real scalar item_for_fit, real matrix Nik, real matrix score_range, real matrix S, pointer matrix point_Uigc, pointer matrix point_Fg){
+
+		obs_i=J(rows(*point_Fg[1]),1,0)
+		ord_ic = (*(*point_Uigc[item_for_fit,1])[2])
+		if(rows(ord_ic)){
+			obs_i[ord_ic]=J(rows(ord_ic),1,1)
+		}
+
+		Oik=J(rows(Nik),1,0)
+		for(i=1;i<=rows(Nik);i++){
+			sel_i=select((1::rows(obs_i)), (S:>=score_range[i,1] ):* (S:<=score_range[i,2] ))
+			if(rows(sel_i)){
+				Oik[i]=cross( (*point_Fg[1])[sel_i] , obs_i[sel_i])
+			}
+		}
+		
+		Qik = Oik \ (Nik :- Oik)
+		
+		results=J(2,1,NULL)
+		results[1]=return_pointer(Oik)
+		results[2]=return_pointer(Qik)
+		return(results)
+		
+	}
+	
+	
 	pointer sx2_collapse_cats_fixed_centile(real matrix Eik_in, real matrix dEik_in, real matrix Nik_obs_in, real matrix sx2_control) {
 
 		// TDL - note that we skipped returning dEik and using observed counts - not accounted for below
@@ -6670,9 +6837,13 @@ mata:
 
 
 
-	pointer sx2_collapse_cats(real matrix Eik, real matrix Nik, real colvector sx2_control){
+	pointer sx2_collapse_cats(real matrix Nik_obs, pointer matrix LW_results, pointer matrix differentiate_EikPSk_results, real colvector sx2_control){
 
 		// Weights are assumed to sum up to N here
+		
+		Eik = (*LW_results[1]) // copy
+		PSk = (*LW_results[2]) // copy
+		Nik = sum(Nik_obs) * PSk // expected counts
 
 		sx2_min_freq = sx2_control[1]
 		sx2_fixed_K = sx2_control[2]
@@ -6683,18 +6854,12 @@ mata:
 
 		exp_freq_1=Nik:*Eik
 		exp_freq_0=Nik:*(1:-Eik)
-//		exp_NPQ = exp_freq_1 :* (1 :- Eik)
 
 		while (rows(Eik) > 1 & ((sx2_fixed_K==. & min((exp_freq_1 :< exp_freq_0) :* exp_freq_1 :+ (exp_freq_0 :<= exp_freq_1) :* exp_freq_0) < sx2_min_freq) |
 			   (sx2_fixed_K!=. & rows(Eik) > sx2_fixed_K))) {
 
-// we will test out the same collapsing ciretion for fixed K as well
-//			if (sx2_fixed_K == .) {
-				which = (exp_freq_1 :< exp_freq_0)
-				criterion = which :* exp_freq_1 :+ (1 :- which) :* exp_freq_0
-//			} else {
-//				criterion = exp_NPQ
-//			}
+			which = (exp_freq_1 :< exp_freq_0)
+			criterion = which :* exp_freq_1 :+ (1 :- which) :* exp_freq_0
 
 			minval = min(criterion)
 			for (i=1; i<=rows(criterion); i++) {
@@ -6727,7 +6892,7 @@ mata:
 
 			exp_freq_1=Nik:*Eik
 			exp_freq_0=Nik:*(1:-Eik)
-//			exp_NPQ = exp_freq_1 :* (1 :- Eik)
+			
 		}
 
 		if (sx2_fixed_K == . & rows(Eik) <= 1) {
@@ -6736,95 +6901,54 @@ mata:
 		if (sx2_fixed_K != . & rows(Eik) > sx2_fixed_K) {
 			warning = "too few score categories to collapse to sx2_fixed_K=" + strofreal(sx2_fixed_K)
 		}
+		
+		//collapsing other stuff
+		
+		Eik_full = *LW_results[1]
+		PSk_full = *LW_results[2]
+		Eik_Jacobian_full = *differentiate_EikPSk_results[1]
+		PSk_Jacobian_full = *differentiate_EikPSk_results[2]
+		
+		Nik_obs_collapsed = J(rows(score_range),1,.)
+		PSk_collapsed = J(rows(score_range),1,.)		
+		Eik_Jacobian_collapsed = J(rows(score_range),cols(Eik_Jacobian_full),.)
+		PSk_Jacobian_collapsed = J(rows(score_range),cols(PSk_Jacobian_full),.)
 
-		results=J(8,1,NULL)
+		for (ii = 1; ii <= rows(score_range); ii++) {
+		
+			i1 = score_range[ii, 1] + 1
+			i2 = score_range[ii, 2] + 1
+			
+			Nik_obs_collapsed[ii] = sum(Nik_obs[i1::i2])
+			
+			PSk_collapsed[ii] = sum(PSk_full[i1::i2])
+			
+			PSk_Jacobian_collapsed[ii,.] = colsum(PSk_Jacobian_full[i1::i2,.])
+			
+			if(i1==i2){
+			    Eik_Jacobian_collapsed[ii,.] = Eik_Jacobian_full[i1,.]
+			}
+			else{
+			    Eik_Jacobian_collapsed[ii,.] = ( PSk_collapsed[ii] * colsum( (Eik_full[i1::i2] :* PSk_Jacobian_full[i1::i2,.]) :+ (PSk_full[i1::i2] :* Eik_Jacobian_full[i1::i2,.]) ) 
+												:- colsum( Eik_full[i1::i2] :* PSk_full[i1::i2] ) :* PSk_Jacobian_collapsed[ii,.] ) / PSk_collapsed[ii]^2
+			}
+			
+		}
+
+		results=J(10,1,NULL)
 		results[1]=return_pointer(Eik)
 		results[2]=return_pointer(score_range)
 		results[3]=return_pointer(Nik)
 		results[4]=return_pointer(exp_freq_1)
 		results[5]=return_pointer(exp_freq_0)
-//		results[6]=return_pointer(exp_NPQ)
-//		results[7]=return_pointer(dEik)
-		results[8]=&warning
+		results[6]=return_pointer(Nik_obs_collapsed)
+		results[7]=return_pointer(PSk_collapsed)
+		results[8]=return_pointer(Eik_Jacobian_collapsed)
+		results[9]=return_pointer(PSk_Jacobian_collapsed)
+		results[10]=&warning
 		return(results)
 	}
-
-		real matrix differentiate_Eik(class ITEMS scalar Q, class GROUPS scalar Gx, real scalar item_for_fit, real matrix score_range, real colvector v_i_range, real colvector sx2_control){
-
-			long_final_estimates=create_long_vector(Q,Gx,"pars")
-			N_par=rows(long_final_estimates)
-			Cns_matrix=create_long_Cns_matrix(Q,Gx)[.,1..N_par]
-			Cns_ind = colsum(lowertriangle(Cns_matrix'*Cns_matrix))
-			rasch_ind= (colsum(Cns_matrix) :- Cns_ind):!=0
-			rasch_idx = select((1::N_par),rasch_ind')
-			if(N_par!=rows(v_i_range)){
-				for(par=1;par<=N_par;par++){
-					if(!anyof(v_i_range,par)){
-						Cns_ind[par]=-1 // effectively skip when explicitly limiting the range of parameters in v_i_range
-					}
-				}
-			}
-
-			class ITEMS scalar Qpar
-			class GROUPS scalar Gpar
-			Qpar=cloneQ(Q)
-			Gpar=cloneG(Gx)
-
-			//perturbation = crit_par*10
-			perturbation = 10^-3
-			perturb_by=(perturbation,-perturbation)'
-			multiply_by=(1,-1)'
-
-			n_sc = rows(score_range)
-			Long_gradient_matrix = J(n_sc,N_par,0)
-			for(h=1;h<=rows(perturb_by);h++){
-				for(par=1;par<=N_par;par++){
-					if(Cns_ind[par]==0){ // skip fixed parameters + quick 1PL treatment fix
-
-						long_final_estimates_par		= long_final_estimates
-						if(anyof(rasch_idx,par)){
-							long_final_estimates_par[rasch_idx]	= long_final_estimates_par[rasch_idx]:+perturb_by[h]
-						}
-						else{
-							long_final_estimates_par[par]		= long_final_estimates_par[par]:+perturb_by[h]
-						}
-
-						Qpar.put(Qpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,0))
-
-						Gpar.put(Gpar.pars,.,uncreate_long_vector(Q, Gx, long_final_estimates_par,1))
-
-						LW_results = sx2_lord_wingersky(Qpar, Gpar,  item_for_fit, sx2_control)
-						Eik_full_pert = *LW_results[1]
-						PSk_full_pert = *LW_results[2]
-						Eik_pert = J(n_sc,1,.)
-						for (i = 1; i <= n_sc; i++) {
-							i1 = score_range[i, 1] + 1
-							i2 = score_range[i, 2] + 1
-							w = PSk_full_pert[i1::i2]
-							Eik_pert[i] = (Eik_full_pert[i1::i2]' * w / sum(w))
-						}
-
-					//	if(anyof(rasch_idx,par)){
-					//		for(i=1;i<=rows(rasch_idx);i++){
-					//			Long_gradient_matrix[.,rasch_idx[i]]=  Long_gradient_matrix[.,rasch_idx[i]] :+ multiply_by[h] :* Eik_pert
-					//		}
-					//	}
-					//	else{
-							Long_gradient_matrix[.,par]=  Long_gradient_matrix[.,par] :+ multiply_by[h] :* Eik_pert // fine for 1PL as other a pars have zeros in e(V)
-					//	}
-					}
-				}
-			}
-
-			Long_gradient_matrix = Long_gradient_matrix :/ (2*perturbation)
-
-			if(N_par!=rows(v_i_range)){
-				Long_gradient_matrix=Long_gradient_matrix[.,v_i_range]
-			}
-
-			return(Long_gradient_matrix)
-
-	}
+	
 
 	pointer sx2_lord_wingersky(class ITEMS  scalar Q, class GROUPS scalar Gx, real scalar item_for_fit, real colvector sx2_control){
 
