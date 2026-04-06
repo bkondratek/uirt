@@ -15,7 +15,7 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 	}
 	else{
 	
-		m: decimals=(3,4),(0,0),(4,3,3),(3,4,0),(4)
+		m: decimals=(3,4),(0,0),(4,3,3),(4)
 		local postest="sx2(`0')"
 		
 		unab allvars: *
@@ -28,7 +28,9 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 		
 		if("`varlist'"=="" & "`minfreq'"=="" & `if_sx2'){
 			mat temp=e(item_fit_SX2)
-			mat temp_rev=e(item_fit_SX2_rev)
+			mat temp_iS=e(item_fit_X2_iS)
+			mat temp_full=e(item_fit_X2_full)
+			mat temp_S=e(item_fit_X2_S)
 		}
 		else{
 			if("`postest'"=="sx2()"){
@@ -39,8 +41,11 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 			m: stata("qui estimates store "+backup_e)
 			
 			m: stata("`e(cmdstrip)' `postest' fix(prev used) err(stored) nit(0) tr(0) not noh")
+			
 			mat temp=e(item_fit_SX2)
-			mat temp_rev=e(item_fit_SX2_rev)
+			mat temp_iS=e(item_fit_X2_iS)
+			mat temp_full=e(item_fit_X2_full)
+			mat temp_S=e(item_fit_X2_S)
 			
 			m: stata("qui estimates restore "+backup_e)
 			m: stata("qui estimates drop "+backup_e)
@@ -50,9 +55,13 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 		local ncol_temp=colsof(temp)
 		if(`ncol_temp'>1){
 			m: _display_matrix_as_table("temp",decimals)
-			m: _display_matrix_as_table("temp_rev",decimals)
+			m: _display_matrix_as_table("temp_iS",decimals)
+			m: _display_matrix_as_table("temp_full",decimals)
+			m: _display_matrix_as_table("temp_S",decimals)
 			return matrix item_fit_SX2 temp 
-			return matrix item_fit_SX2_rev temp_rev 
+			return matrix item_fit_X2_iS temp_iS 
+			return matrix item_fit_X2_full temp_full 
+			return matrix item_fit_X2_S temp_S 
 		}		
 		
 	}

@@ -2,7 +2,7 @@
 *ver 2.3.0
 *2026.03.27
 *everythingthatcounts@gmail.com
-
+clear mata
 capture prog drop uirt
 program define uirt, eclass
 version 10
@@ -1494,7 +1494,7 @@ mata:
 
 	class ITEMS{
 		public:
-			real scalar names, m_curr ,m_asked ,fix, init, pars ,n_cat , n_par, n_par_model, n_fix, n_init, cns, n_cns, p_cat, g_tot, init_fail, warning_cats, fit_sx2, viable_sx2, delta, a_prior, b_prior, c_prior, se, chi2W_res, SX2_res, SX2_rev_res, par_labs
+			real scalar names, m_curr ,m_asked ,fix, init, pars ,n_cat , n_par, n_par_model, n_fix, n_init, cns, n_cns, p_cat, g_tot, init_fail, warning_cats, fit_sx2, viable_sx2, delta, a_prior, b_prior, c_prior, se, chi2W_res, SX2_res, X2_iS_res, X2_full_res, X2_S_res, par_labs
 			real scalar n_prop
 			real scalar n
 			pointer vector ITEMS_DATA
@@ -1531,10 +1531,12 @@ mata:
 		se=24
 		chi2W_res=25
 		SX2_res=26
-		SX2_rev_res=27
-		par_labs=28
+		X2_iS_res=27
+		X2_full_res=28
+		X2_S_res=29
+		par_labs=30
 
-		n_prop=28
+		n_prop=30
 	}
 
 	void ITEMS::populate(string colvector namevec){
@@ -1569,8 +1571,11 @@ mata:
 			put(se,.,J(n,1,.))
 
 			put(chi2W_res,.,J(n,1,.))
+			
 			put(SX2_res,.,J(n,1,.))
-			put(SX2_rev_res,.,J(n,1,.))
+			put(X2_iS_res,.,J(n,1,.))
+			put(X2_full_res,.,J(n,1,.))
+			put(X2_S_res,.,J(n,1,.))
 			
 			put(par_labs,.,J(n,1,""))
 
@@ -1602,7 +1607,7 @@ mata:
 		if(where==.){
 			where=(1::rows(ITEMS_DATA))
 		}
-		if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,SX2_rev_res,par_labs)) ){
+		if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,X2_iS_res,X2_full_res,X2_S_res,par_labs)) ){
 			if(what==par_labs){
 				empty=""
 			}
@@ -1638,7 +1643,7 @@ mata:
 			where=(1::rows(ITEMS_DATA))
 		}
 		for(i=1;i<=rows(where);i++){
-			if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,SX2_rev_res,par_labs)) ){
+			if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,X2_iS_res,X2_full_res,X2_S_res,par_labs)) ){
 				if(cols(contents[i,.])){
 					if(what==par_labs){
 						empty=""
@@ -1650,7 +1655,7 @@ mata:
 					temp=(*ITEMS_DATA[where[i]])[n_par_model]
 					if(temp!=NULL){
 					    temp=*temp
-    					if( sum(what:==(a_prior,b_prior,c_prior,chi2W_res,SX2_res,SX2_rev_res,par_labs))==0 & temp!=. ){
+    					if( sum(what:==(a_prior,b_prior,c_prior,chi2W_res,SX2_res,X2_iS_res,X2_full_res,X2_S_res,par_labs))==0 & temp!=. ){
 							max_col=min((temp,cols(contents[i,.])))
 						}
 					}
@@ -2087,7 +2092,8 @@ mata:
 			// below are temporary names for research, if last columns are missing they are not returned from Q.get, so a workaround for fixed output
 			// _temp_colnames = (J(9,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","trace_cov","p-val_SX_W_df")')
 			// _temp_colnames = (J(10,1,""),("SX2","p-val","df","n_par","SX2_W","p-val_W","df_W","trace_cov","p-val_SX_W_df","min_np_nq")')
-			_temp_colnames = (J(11,1,""),("SX2","p-val","df","n_par",   "p-val_cv","c","v",  "SX2_W","p-val_W", "df_W","min_np_nq")')
+			//_temp_colnames = (J(11,1,""),("SX2","p-val","df","n_par",   "p-val_cv","c","v",  "SX2_W","p-val_W", "df_W","min_np_nq")')
+			_temp_colnames = (J(8,1,""),("SX2","p-val","df","n_par",   "p-val_cv","c","v", "min_np_nq")')
 			_res_n_cols = cols(st_matrix("item_fit_SX2"))
 			_res_n_rows = rows(st_matrix("item_fit_SX2"))
 			if( _res_n_cols != rows(_temp_colnames) ){
@@ -2096,16 +2102,38 @@ mata:
 			st_matrixcolstripe("item_fit_SX2",_temp_colnames )
 			st_matrixrowstripe("item_fit_SX2", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
 			
-			st_matrix("item_fit_SX2_rev",Q.get(Q.SX2_rev_res,fit_indx))
-			_temp_colnames = (J(11,1,""),("SX2_rev","p-val","df","n_par",   "p-val_cv","c","v",  "SX2_rev_W","p-val_W", "df_W","min_nq")')
-			_res_n_cols = cols(st_matrix("item_fit_SX2_rev"))
-			_res_n_rows = rows(st_matrix("item_fit_SX2_rev"))
+			
+			st_matrix("item_fit_X2_iS",Q.get(Q.X2_iS_res,fit_indx))
+			_temp_colnames = (J(8,1,""),("X2_iS","p-val","df","n_par",   "p-val_cv","c","v", "min_np_nq")')
+			_res_n_cols = cols(st_matrix("item_fit_X2_iS"))
+			_res_n_rows = rows(st_matrix("item_fit_X2_iS"))
 			if( _res_n_cols != rows(_temp_colnames) ){
-				st_matrix( "item_fit_SX2_rev", ( st_matrix("item_fit_SX2_rev"),J(_res_n_rows, rows(_temp_colnames)-_res_n_cols, .) ))
+				st_matrix( "item_fit_X2_iS", ( st_matrix("item_fit_X2_iS"),J(_res_n_rows, rows(_temp_colnames)-_res_n_cols, .) ))
 			}
-			st_matrixcolstripe("item_fit_SX2_rev",_temp_colnames )
-			st_matrixrowstripe("item_fit_SX2_rev", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
-
+			st_matrixcolstripe("item_fit_X2_iS",_temp_colnames )
+			st_matrixrowstripe("item_fit_X2_iS", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
+			
+			st_matrix("item_fit_X2_full",Q.get(Q.X2_full_res,fit_indx))
+			_temp_colnames = (J(8,1,""),("X2_full","p-val","df","n_par",   "p-val_cv","c","v", "min_np_nq")')
+			_res_n_cols = cols(st_matrix("item_fit_X2_full"))
+			_res_n_rows = rows(st_matrix("item_fit_X2_full"))
+			if( _res_n_cols != rows(_temp_colnames) ){
+				st_matrix( "item_fit_X2_full", ( st_matrix("item_fit_X2_full"),J(_res_n_rows, rows(_temp_colnames)-_res_n_cols, .) ))
+			}
+			st_matrixcolstripe("item_fit_X2_full",_temp_colnames )
+			st_matrixrowstripe("item_fit_X2_full", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
+			
+			st_matrix("item_fit_X2_S",Q.get(Q.X2_S_res,fit_indx))
+			_temp_colnames = (J(8,1,""),("X2_S","p-val","df","n_par",   "p-val_cv","c","v", "min_np_nq")')
+			_res_n_cols = cols(st_matrix("item_fit_X2_S"))
+			_res_n_rows = rows(st_matrix("item_fit_X2_S"))
+			if( _res_n_cols != rows(_temp_colnames) ){
+				st_matrix( "item_fit_X2_S", ( st_matrix("item_fit_X2_S"),J(_res_n_rows, rows(_temp_colnames)-_res_n_cols, .) ))
+			}
+			st_matrixcolstripe("item_fit_X2_S",_temp_colnames )
+			st_matrixrowstripe("item_fit_X2_S", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
+			
+			
 		}
 
 // DIF
@@ -2162,7 +2190,9 @@ mata:
 
 	if(sum(Q.get(Q.fit_sx2,.))>0){
 		stata("ereturn matrix item_fit_SX2 item_fit_SX2")
-		stata("ereturn matrix item_fit_SX2_rev item_fit_SX2_rev")
+		stata("ereturn matrix item_fit_X2_iS item_fit_X2_iS")
+		stata("ereturn matrix item_fit_X2_full item_fit_X2_full")
+		stata("ereturn matrix item_fit_X2_S item_fit_X2_S")
 	}
 
 	if(pvreg!="."){
@@ -6483,141 +6513,213 @@ mata:
 			Oik = *sx2_observed_counts_results[1]
 			Qik = *sx2_observed_counts_results[2]
 			
+
+			n_est_par_i	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
+			n_est_par_d = 2
+			n_fixed = sum(Q.get(Q.n_fix,.)) + sum(Gx.get(Gx.cns,.)) // TDL - need to distinguish between fixing a, b and c - makes a difference
+			if(n_fixed==3){
+				n_est_par_d=1
+			}
+			if(n_fixed>3){
+				n_est_par_d=0
+			}
+			
+			//vvv
+			// df_model = Gx.n*2 +sum(Q.get(Q.n_par,.)) - sum(Q.get(Q.n_fix,.)) - sum(Gx.get(Gx.cns,.))
+			// Gx.n*2 
+			// sum(Q.get(Q.n_par,.)) 
+			// sum(Q.get(Q.n_fix,.)) 
+			// sum(Gx.get(Gx.cns,.))
+
+			
+			// SX2
+			// conditional item residuals:
+			// R = (Oik:-Nik:*Eik):/sqrt(Nik:*Eik:*(1:-Eik))
+			
 			dRik = ( - (Oik :* (1 :- 2 * Eik_collapsed) :+ Nik_obs_collapsed :* Eik_collapsed ) 
 						:/
 						(2 * sqrt(Nik_obs_collapsed) :* (Eik_collapsed:*(1 :- Eik_collapsed)):^1.5 ) ) :* Eik_Jacobian_collapsed
 						
 
-			cov_SX2 = I(rows(dRik)) - dRik*v_i*dRik' // test quadcross later
+			cov_X2_OT = I(rows(dRik)) - dRik*v_i*dRik' // test quadcross later
+						
+			X2_OT_results	=	X2_OT(Oik, Eik_collapsed, Nik_obs_collapsed , n_est_par_i, cov_X2_OT)
 			
-			n_est_par	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
+			Q.put(Q.SX2_res, item_indx[i], (X2_OT_results', min_np_nq ) )
 			
-			SX2_item_results	=	sx2_orlando_thissen(Oik, Eik_collapsed, Nik_obs_collapsed , n_est_par, cov_SX2)
+
+			// X2_iS
+			// conditional item residuals:
+			// R = (Oik :- N_obs :* PSk :* Eik) :/ sqrt(N_obs :* PSk :* Eik :* (1 :- Eik))  <--- NONONONONO!
+			// R = (Oik :- Nik :* Eik) :/ sqrt(N_obs :* PSk :* Eik :* (1 :- Eik))  <--- NONONONONO!
+			dRik_iS = ( ( - (Oik :- Nik_obs_collapsed :* Eik_collapsed)
+						:/
+						(2 * sqrt(N_obs) :* PSk_collapsed :^1.5 :* sqrt(Eik_collapsed :* (1 :- Eik_collapsed))) ) :* PSk_Jacobian_collapsed
+						:+
+						( - (Oik :* (1 :- 2 * Eik_collapsed) :+ Nik_obs_collapsed :* Eik_collapsed)
+						:/
+						(2 * sqrt(N_obs) :* sqrt(PSk_collapsed) :* (Eik_collapsed :* (1 :- Eik_collapsed)) :^1.5) ) :* Eik_Jacobian_collapsed )
+
+			cov_X2_iS = I(rows(dRik_iS)) - dRik_iS*v_i*dRik_iS'
 			
-			// Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par) )
-			// st_matrixcolstripe("item_fit_SX2", (J(10,1,""),("SX2","p-val","df","n_par",   "p-val_cv","c","v",  "SX2_W","p-val_W", "df_W")'))
-			Q.put(Q.SX2_res, item_indx[i], (*SX2_item_results[1],*SX2_item_results[2],*SX2_item_results[3],n_est_par,
-			*SX2_item_results[6],*SX2_item_results[7],*SX2_item_results[8],
-			*SX2_item_results[9],*SX2_item_results[10],*SX2_item_results[11], min_np_nq ) )
 			
+			X2_iS_results	=	X2_iS(Oik, Eik_collapsed, PSk_collapsed, Nik_obs_collapsed, N_obs , n_est_par_i, cov_X2_iS)
 			
-			//revised SX2
+			Q.put(Q.X2_iS_res, item_indx[i], (X2_iS_results', min_np_nq ) )
+						
+			
+			// X2_full
+			// full multinomial residuals 
+			// R = (Qik:-N_obs:*qik):/sqrt(N_obs:*qik)
 			qik = (Eik_collapsed :* PSk_collapsed) \ ( (1:-Eik_collapsed) :* PSk_collapsed)
 			
-			dRik_rev = ( - (Qik :+ N_obs :* qik) :/ (2 * sqrt(N_obs) :* qik :^1.5) ) :* (																						
+			dRik_full = ( - (Qik :+ N_obs :* qik) :/ (2 * sqrt(N_obs) :* qik :^1.5) ) :* (																						
 			( Eik_collapsed :* PSk_Jacobian_collapsed :+ PSk_collapsed :* Eik_Jacobian_collapsed ) \  ( (1 :- Eik_collapsed) :* PSk_Jacobian_collapsed  :- PSk_collapsed :* Eik_Jacobian_collapsed ) )
 																						
 			qik_sqrt = sqrt(qik)							
-			cov_SX2_rev = I(rows(dRik_rev)) -qik_sqrt*qik_sqrt'- dRik_rev*v_i*dRik_rev' // test quadcross later	
+			cov_X2_full= I(rows(dRik_full)) -qik_sqrt*qik_sqrt'- dRik_full*v_i*dRik_full' 
 			
-			SX2_rev_item_results	=	sx2_revised(Qik, qik, N_obs , n_est_par, cov_SX2_rev)	
+			X2_full_results	=	X2_full(Qik, qik, N_obs , n_est_par_i + n_est_par_d, cov_X2_full)
 			
-			Q.put(Q.SX2_rev_res, item_indx[i], (*SX2_rev_item_results[1],*SX2_rev_item_results[2],*SX2_rev_item_results[3],n_est_par,
-			*SX2_rev_item_results[6],*SX2_rev_item_results[7],*SX2_rev_item_results[8],
-			*SX2_rev_item_results[9],*SX2_rev_item_results[10],*SX2_rev_item_results[11], min(N_obs * qik )) )
+			Q.put(Q.X2_full_res, item_indx[i], (X2_full_results', min_np_nq ) )
+			
+
+			
+			
+			// X2_S
+			// score-distribution residuals:
+			// R = (Nik_obs :- N_obs :* PSk) :/ sqrt(N_obs :* PSk)
+			dRik_S = ( - (Nik_obs_collapsed :+ N_obs :* PSk_collapsed) 
+						:/
+						(2 * sqrt(N_obs) :* PSk_collapsed :^ 1.5) ) :* PSk_Jacobian_collapsed
+
+			PSk_sqrt = sqrt(PSk_collapsed)
+			cov_X2_S = I(rows(dRik_S)) - PSk_sqrt*PSk_sqrt' - dRik_S*v_i*dRik_S'
+			
+			
+			X2_S_results	=	X2_S(Nik_obs_collapsed, PSk_collapsed, N_obs , n_est_par_d, cov_X2_S) // TDL - fix this quick n_est_par=2 fix to accomodate fixing case properly
+			
+			
+			Q.put(Q.X2_S_res, item_indx[i], (X2_S_results', min_np_nq ) ) // TDL: (1) we need only once for fixed bins, (2) the min_np_nq does not actually aply, is too restrictive  (we sum 0 and 1 for bin)
 			
 			
 		}
 
 	}
-	
-	
-	pointer sx2_revised(real matrix Qik, real matrix qik, real scalar N_obs, real scalar n_est_par, real matrix cov_SX2){
+
+	real colvector X2_S(real matrix Nik_obs, real matrix PSk, real scalar N_obs, real scalar n_est_par, real matrix COV){
 		
-		Rik = (Qik:-N_obs:*qik):/sqrt(N_obs:*qik)
 		
-		SX2= cross(Rik,Rik) 
-		df=rows(Rik)-n_est_par - 1
+		R = (Nik_obs :- N_obs :* PSk) :/ sqrt(N_obs :* PSk)
+		
+		SX2= cross(R,R)
+		df=rows(R)-n_est_par - 1
 		pvalue=(1:-chi2(df,SX2))
 
 		// mean-variance pv-value approximation
-		trace_cov=trace(cov_SX2)
-		trace_cov2 = trace(cov_SX2*cov_SX2)
+		trace_cov=trace(COV)
+		trace_cov2 = trace(COV*COV)
 		c_df = trace_cov2/trace_cov
 		v_df = trace_cov^2/trace_cov2
 		pvalue_cv=( 1:-chi2(v_df,SX2/c_df)) // !!!!!!!
 
-		// standardised statistic
-		cov_SX2=(makesymmetric(cov_SX2):+makesymmetric(cov_SX2')):/2
-		cov_invers= invsym(cov_SX2)
-		//cov_invers= pinv(cov_SX2)
-		if(rank(cov_invers)==df + n_est_par){ // only if pseudoinverse rank matches fixed case structure
-			SX2_W= Rik'*cov_invers*Rik
-			df_SX2_W = rank(cov_invers)
-			pvalue_W=( 1:-chi2(df_SX2_W,SX2_W))
-		}
-		else{
-			SX2_W= .
-			df_SX2_W = .
-			pvalue_W= .
-		}
+		results=J(7,1,.)
+		results[1]=SX2
+		results[2]=pvalue
+		results[3]=df
+		results[4]=n_est_par
+		results[5]=pvalue_cv
+		results[6]=c_df
+		results[7]=v_df
 
-		results=J(11,1,NULL)
-		results[1]=return_pointer(SX2)
-		results[2]=return_pointer(pvalue)
-		results[3]=return_pointer(df)
+		return(results)
+	
+	}	
+	
+	
+	real colvector X2_iS(real matrix Oik, real matrix Eik, real matrix PSk, real matrix Nik, real scalar N_obs, real scalar n_est_par, real matrix COV){
+			
+		R = (Oik :- Nik :* Eik) :/ sqrt(N_obs :* PSk :* Eik :* (1 :- Eik))
+		
+		SX2= cross(R,R)
+		df=rows(R)-n_est_par
+		pvalue=(1:-chi2(df,SX2))
 
-		results[4]=return_pointer(Oik)
-		results[5]=return_pointer(Nik)
+		// mean-variance pv-value approximation
+		trace_cov=trace(COV)
+		trace_cov2 = trace(COV*COV)
+		c_df = trace_cov2/trace_cov
+		v_df = trace_cov^2/trace_cov2
+		pvalue_cv=( 1:-chi2(v_df,SX2/c_df)) // !!!!!!!
 
-		results[6]=return_pointer(pvalue_cv)
-		results[7]=return_pointer(c_df)
-		results[8]=return_pointer(v_df)
+		results=J(7,1,.)
+		results[1]=SX2
+		results[2]=pvalue
+		results[3]=df
+		results[4]=n_est_par
+		results[5]=pvalue_cv
+		results[6]=c_df
+		results[7]=v_df
 
-		results[9]=return_pointer(SX2_W)
-		results[10]=return_pointer(pvalue_W)
-		results[11]=return_pointer(df_SX2_W)
+		return(results)
+	
+	}
+	
+	
+	
+	real colvector X2_full(real matrix Qik, real matrix qik, real scalar N_obs, real scalar n_est_par, real matrix COV){
+		
+		R = (Qik:-N_obs:*qik):/sqrt(N_obs:*qik)
+		
+		SX2= cross(R,R) 
+		df=rows(R)-n_est_par - 1
+		pvalue=(1:-chi2(df,SX2))
+
+		// mean-variance pv-value approximation
+		trace_cov=trace(COV)
+		trace_cov2 = trace(COV*COV)
+		c_df = trace_cov2/trace_cov
+		v_df = trace_cov^2/trace_cov2
+		pvalue_cv=( 1:-chi2(v_df,SX2/c_df)) // !!!!!!!
+
+		results=J(7,1,.)
+		results[1]=SX2
+		results[2]=pvalue
+		results[3]=df
+		results[4]=n_est_par
+		results[5]=pvalue_cv
+		results[6]=c_df
+		results[7]=v_df
+
 
 		return(results)
 	
 	}
 
 	
-	pointer sx2_orlando_thissen(real matrix Oik, real matrix Eik, real matrix Nik, real scalar n_est_par, real matrix cov_SX2){
+	real colvector X2_OT(real matrix Oik, real matrix Eik, real matrix Nik, real scalar n_est_par, real matrix COV){
 		
-		Rik = (Oik:-Nik:*Eik):/sqrt(Nik:*Eik:*(1:-Eik))
+		R = (Oik:-Nik:*Eik):/sqrt(Nik:*Eik:*(1:-Eik))
 		
-		SX2= cross(Rik,Rik) //previous, using proportions: SX2=sum(( Nik:*(Oik:-Eik):*(Oik:-Eik)):/(Eik:*(1:-Eik)))
-		df=rows(Eik)-n_est_par
+		SX2= cross(R,R) 
+		df=rows(R)-n_est_par
 		pvalue=(1:-chi2(df,SX2))
 
 		// mean-variance pv-value approximation
-		trace_cov=trace(cov_SX2)
-		trace_cov2 = trace(cov_SX2*cov_SX2)
+		trace_cov=trace(COV)
+		trace_cov2 = trace(COV*COV)
 		c_df = trace_cov2/trace_cov
 		v_df = trace_cov^2/trace_cov2
 		pvalue_cv=( 1:-chi2(v_df,SX2/c_df)) // !!!!!!!
 
-		// standardised statistic
-		cov_SX2=(makesymmetric(cov_SX2):+makesymmetric(cov_SX2')):/2
-		cov_invers= invsym(cov_SX2)
-		//cov_invers= pinv(cov_SX2)
-		if(rank(cov_invers)==df + n_est_par){ // only if pseudoinverse rank matches fixed case structure
-			SX2_W= Rik'*cov_invers*Rik
-			df_SX2_W = rank(cov_invers)
-			pvalue_W=( 1:-chi2(df_SX2_W,SX2_W))
-		}
-		else{
-			SX2_W= .
-			df_SX2_W = .
-			pvalue_W= .
-		}
-
-		results=J(11,1,NULL)
-		results[1]=return_pointer(SX2)
-		results[2]=return_pointer(pvalue)
-		results[3]=return_pointer(df)
-
-		results[4]=return_pointer(Oik)
-		results[5]=return_pointer(Nik)
-
-		results[6]=return_pointer(pvalue_cv)
-		results[7]=return_pointer(c_df)
-		results[8]=return_pointer(v_df)
-
-		results[9]=return_pointer(SX2_W)
-		results[10]=return_pointer(pvalue_W)
-		results[11]=return_pointer(df_SX2_W)
+		results=J(7,1,.)
+		results[1]=SX2
+		results[2]=pvalue
+		results[3]=df
+		results[4]=n_est_par
+		results[5]=pvalue_cv
+		results[6]=c_df
+		results[7]=v_df
 
 		return(results)
 	
