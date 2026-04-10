@@ -28,6 +28,7 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 		
 		if("`varlist'"=="" & "`minfreq'"=="" & `if_sx2'){
 			mat temp=e(item_fit_SX2)
+			mat temp_SX2_exp=e(item_fit_SX2_exp)
 			mat temp_iS=e(item_fit_X2_iS)
 			mat temp_full=e(item_fit_X2_full)
 			mat temp_S=e(item_fit_X2_S)
@@ -43,6 +44,7 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 			m: stata("`e(cmdstrip)' `postest' fix(prev used) err(stored) nit(0) tr(0) not noh")
 			
 			mat temp=e(item_fit_SX2)
+			mat temp_SX2_exp=e(item_fit_SX2_exp)
 			mat temp_iS=e(item_fit_X2_iS)
 			mat temp_full=e(item_fit_X2_full)
 			mat temp_S=e(item_fit_X2_S)
@@ -53,12 +55,19 @@ syntax [varlist] [, MINFreq(numlist max=1 >0) bins(numlist integer max=1 >=1)]
 		}
 	
 		local ncol_temp=colsof(temp)
+		local ncol_temp_SX2_exp=colsof(temp_SX2_exp)
 		if(`ncol_temp'>1){
 			m: _display_matrix_as_table("temp",decimals)
+			if(`ncol_temp_SX2_exp'>1){
+			    m: _display_matrix_as_table("temp_SX2_exp",decimals)
+			}
 			m: _display_matrix_as_table("temp_iS",decimals)
 			m: _display_matrix_as_table("temp_full",decimals)
 			m: _display_matrix_as_table("temp_S",decimals)
-			return matrix item_fit_SX2 temp 
+			return matrix item_fit_SX2 temp
+ 			if(`ncol_temp_SX2_exp'>1){
+			   return matrix item_fit_SX2_exp temp_SX2_exp
+			}
 			return matrix item_fit_X2_iS temp_iS 
 			return matrix item_fit_X2_full temp_full 
 			return matrix item_fit_X2_S temp_S 

@@ -1039,7 +1039,7 @@ syntax [varlist] [if] [in] [, GRoup(str asis)  pcm(varlist) gpcm(varlist) GUEssi
 		}
 		m: sx2_control[3]=1 // if_gradient_all
 		m: sx2_control[4]=1 // if_include_extreme
-		m: sx2_control[5]=1 // if_weight_exp
+		m: sx2_control[5]=1 // if_weight_obs_for_SX2
 		m: sx2_control[6]=0 // if_analytical_dEik <- only if if_gradient_all==0
 
 
@@ -1494,7 +1494,7 @@ mata:
 
 	class ITEMS{
 		public:
-			real scalar names, m_curr ,m_asked ,fix, init, pars ,n_cat , n_par, n_par_model, n_fix, n_init, cns, n_cns, p_cat, g_tot, init_fail, warning_cats, fit_sx2, viable_sx2, delta, a_prior, b_prior, c_prior, se, chi2W_res, SX2_res, X2_iS_res, X2_full_res, X2_S_res, par_labs
+			real scalar names, m_curr ,m_asked ,fix, init, pars ,n_cat , n_par, n_par_model, n_fix, n_init, cns, n_cns, p_cat, g_tot, init_fail, warning_cats, fit_sx2, viable_sx2, delta, a_prior, b_prior, c_prior, se, chi2W_res, SX2_res, SX2_exp_res, X2_iS_res, X2_full_res, X2_S_res, par_labs
 			real scalar n_prop
 			real scalar n
 			pointer vector ITEMS_DATA
@@ -1531,12 +1531,13 @@ mata:
 		se=24
 		chi2W_res=25
 		SX2_res=26
-		X2_iS_res=27
-		X2_full_res=28
-		X2_S_res=29
-		par_labs=30
+		SX2_exp_res=27
+		X2_iS_res=28
+		X2_full_res=29
+		X2_S_res=30
+		par_labs=31
 
-		n_prop=30
+		n_prop=31
 	}
 
 	void ITEMS::populate(string colvector namevec){
@@ -1573,6 +1574,7 @@ mata:
 			put(chi2W_res,.,J(n,1,.))
 			
 			put(SX2_res,.,J(n,1,.))
+			put(SX2_exp_res,.,J(n,1,.))
 			put(X2_iS_res,.,J(n,1,.))
 			put(X2_full_res,.,J(n,1,.))
 			put(X2_S_res,.,J(n,1,.))
@@ -1607,7 +1609,7 @@ mata:
 		if(where==.){
 			where=(1::rows(ITEMS_DATA))
 		}
-		if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,X2_iS_res,X2_full_res,X2_S_res,par_labs)) ){
+		if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,SX2_exp_res,X2_iS_res,X2_full_res,X2_S_res,par_labs)) ){
 			if(what==par_labs){
 				empty=""
 			}
@@ -1643,7 +1645,7 @@ mata:
 			where=(1::rows(ITEMS_DATA))
 		}
 		for(i=1;i<=rows(where);i++){
-			if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,X2_iS_res,X2_full_res,X2_S_res,par_labs)) ){
+			if( sum(what:==(pars,fix,init,cns,delta,a_prior,b_prior,c_prior,se,chi2W_res,SX2_res,SX2_exp_res,X2_iS_res,X2_full_res,X2_S_res,par_labs)) ){
 				if(cols(contents[i,.])){
 					if(what==par_labs){
 						empty=""
@@ -1655,7 +1657,7 @@ mata:
 					temp=(*ITEMS_DATA[where[i]])[n_par_model]
 					if(temp!=NULL){
 					    temp=*temp
-    					if( sum(what:==(a_prior,b_prior,c_prior,chi2W_res,SX2_res,X2_iS_res,X2_full_res,X2_S_res,par_labs))==0 & temp!=. ){
+    					if( sum(what:==(a_prior,b_prior,c_prior,chi2W_res,SX2_res,SX2_exp_res,X2_iS_res,X2_full_res,X2_S_res,par_labs))==0 & temp!=. ){
 							max_col=min((temp,cols(contents[i,.])))
 						}
 					}
@@ -2102,6 +2104,16 @@ mata:
 			st_matrixcolstripe("item_fit_SX2",_temp_colnames )
 			st_matrixrowstripe("item_fit_SX2", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
 			
+			st_matrix("item_fit_SX2_exp",Q.get(Q.SX2_exp_res,fit_indx))
+			_temp_colnames = (J(8,1,""),("SX2_exp","p-val","df","n_par",   "p-val_cv","c","v", "min_np_nq")')
+			_res_n_cols = cols(st_matrix("item_fit_SX2_exp"))
+			_res_n_rows = rows(st_matrix("item_fit_SX2_exp"))
+			if( _res_n_cols != rows(_temp_colnames) ){
+				st_matrix( "item_fit_SX2_exp", ( st_matrix("item_fit_SX2_exp"),J(_res_n_rows, rows(_temp_colnames)-_res_n_cols, .) ))
+			}
+			st_matrixcolstripe("item_fit_SX2_exp",_temp_colnames )
+			st_matrixrowstripe("item_fit_SX2_exp", (J(rows(fit_indx),1,""),Q.get(Q.names,fit_indx)))
+			
 			
 			st_matrix("item_fit_X2_iS",Q.get(Q.X2_iS_res,fit_indx))
 			_temp_colnames = (J(8,1,""),("X2_iS","p-val","df","n_par",   "p-val_cv","c","v", "min_np_nq")')
@@ -2190,6 +2202,7 @@ mata:
 
 	if(sum(Q.get(Q.fit_sx2,.))>0){
 		stata("ereturn matrix item_fit_SX2 item_fit_SX2")
+		stata("ereturn matrix item_fit_SX2_exp item_fit_SX2_exp")
 		stata("ereturn matrix item_fit_X2_iS item_fit_X2_iS")
 		stata("ereturn matrix item_fit_X2_full item_fit_X2_full")
 		stata("ereturn matrix item_fit_X2_S item_fit_X2_S")
@@ -6472,7 +6485,21 @@ mata:
 		Nik_obs = *sx2_S_Nik_results[2]
 		N_obs = sum(Nik_obs)
 
+		// determining number of free parameters that can be tentatively associated with distribution
+		n_est_par_d = 2
+		n_fixed = sum(Q.get(Q.n_fix,.)) + sum(Gx.get(Gx.cns,.)) // TDL - need to distinguish between fixing a, b vs. c - makes a difference
+		if(n_fixed==3){
+			n_est_par_d=1
+		}
+		if(n_fixed>3){
+			n_est_par_d=0
+		}
+		
+		
 		for(i=1;i<=I_fit;i++){
+
+		
+			n_est_par_i	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
 
 			LW_results=sx2_lord_wingersky(Q, Gx,  item_indx[i], sx2_control)
 			//Eik = *LW_results[1]
@@ -6491,14 +6518,39 @@ mata:
 				v_i = V[v_i_range,v_i_range'] // TDL - work out the 1plm case (the issue with common a estimated as sd, and error transfered to the 1st item)
 			}
 			
+			if(sx2_control[5]){ // special handling of SX2 if collapse targets Nik_obs, not sum(Nik_obs) * PSk 
+				collapse_cats_results=sx2_collapse_cats(Nik_obs, LW_results, differentiate_EikPSk_results,sx2_control,0)
 
-			if(sx2_control[5]){ // if_weight_exp
-				collapse_cats_results=sx2_collapse_cats(Nik_obs, LW_results, differentiate_EikPSk_results,sx2_control)
+				Eik_collapsed			= *collapse_cats_results[1]
+				score_range				= *collapse_cats_results[2]
+				min_np_nq 				= min (	( *collapse_cats_results[4] , *collapse_cats_results[5] ) )
+				Nik_obs_collapsed 		= *collapse_cats_results[6]
+				PSk_collapsed 			= *collapse_cats_results[7]
+				Eik_Jacobian_collapsed	= *collapse_cats_results[8]
+				PSk_Jacobian_collapsed	= *collapse_cats_results[9]
+				
+				
+				sx2_observed_counts_results = sx2_observed_counts(item_indx[i], Nik_obs_collapsed, score_range, S, point_Uigc, point_Fg)
+				Oik = *sx2_observed_counts_results[1]
+				Qik = *sx2_observed_counts_results[2]
+
+				
+				// SX2 - weighted by obs
+				// conditional item residuals:
+				// R = (Oik:-Nik:*Eik):/sqrt(Nik:*Eik:*(1:-Eik))
+				
+				dRik = ( - (Oik :* (1 :- 2 * Eik_collapsed) :+ Nik_obs_collapsed :* Eik_collapsed ) 
+							:/
+							(2 * sqrt(Nik_obs_collapsed) :* (Eik_collapsed:*(1 :- Eik_collapsed)):^1.5 ) ) :* Eik_Jacobian_collapsed
+							
+
+				cov_X2_OT = I(rows(dRik)) - dRik*v_i*dRik'
+							
+				X2_OT_results	=	X2_OT(Oik, Eik_collapsed, Nik_obs_collapsed , n_est_par_i, cov_X2_OT)
+				
+				Q.put(Q.SX2_res, item_indx[i], (X2_OT_results', min_np_nq ) )
 			}
-			else{
-				// TDL add code to handle weighting by observed instead of expected cell counts
-				// collapse_cats_results=sx2_collapse_cats(Eik_i_full,Nik_obs,sx2_control)
-			}
+			collapse_cats_results=sx2_collapse_cats(Nik_obs, LW_results, differentiate_EikPSk_results,sx2_control,1)
 			
 			Eik_collapsed			= *collapse_cats_results[1]
 			score_range				= *collapse_cats_results[2]
@@ -6512,27 +6564,9 @@ mata:
 			sx2_observed_counts_results = sx2_observed_counts(item_indx[i], Nik_obs_collapsed, score_range, S, point_Uigc, point_Fg)
 			Oik = *sx2_observed_counts_results[1]
 			Qik = *sx2_observed_counts_results[2]
-			
-
-			n_est_par_i	= Q.get(Q.n_par,item_indx[i]):-Q.get(Q.n_fix,item_indx[i])
-			n_est_par_d = 2
-			n_fixed = sum(Q.get(Q.n_fix,.)) + sum(Gx.get(Gx.cns,.)) // TDL - need to distinguish between fixing a, b and c - makes a difference
-			if(n_fixed==3){
-				n_est_par_d=1
-			}
-			if(n_fixed>3){
-				n_est_par_d=0
-			}
-			
-			//vvv
-			// df_model = Gx.n*2 +sum(Q.get(Q.n_par,.)) - sum(Q.get(Q.n_fix,.)) - sum(Gx.get(Gx.cns,.))
-			// Gx.n*2 
-			// sum(Q.get(Q.n_par,.)) 
-			// sum(Q.get(Q.n_fix,.)) 
-			// sum(Gx.get(Gx.cns,.))
 
 			
-			// SX2
+			// SX2 - weighted by exp
 			// conditional item residuals:
 			// R = (Oik:-Nik:*Eik):/sqrt(Nik:*Eik:*(1:-Eik))
 			
@@ -6545,7 +6579,7 @@ mata:
 						
 			X2_OT_results	=	X2_OT(Oik, Eik_collapsed, Nik_obs_collapsed , n_est_par_i, cov_X2_OT)
 			
-			Q.put(Q.SX2_res, item_indx[i], (X2_OT_results', min_np_nq ) )
+			Q.put(Q.SX2_exp_res, item_indx[i], (X2_OT_results', min_np_nq ) )
 			
 
 			// X2_iS
@@ -6702,7 +6736,8 @@ mata:
 		R = (Oik:-Nik:*Eik):/sqrt(Nik:*Eik:*(1:-Eik))
 		
 		SX2= cross(R,R) 
-		df=rows(R)-n_est_par
+		//df=rows(R)-n_est_par
+		df=nonmissing(R)-n_est_par //<-- it can happen that Nik=0 and we loose a df; a quick fix, make it nicer later
 		pvalue=(1:-chi2(df,SX2))
 
 		// mean-variance pv-value approximation
@@ -6939,13 +6974,18 @@ mata:
 
 
 
-	pointer sx2_collapse_cats(real matrix Nik_obs, pointer matrix LW_results, pointer matrix differentiate_EikPSk_results, real colvector sx2_control){
+	pointer sx2_collapse_cats(real matrix Nik_obs, pointer matrix LW_results, pointer matrix differentiate_EikPSk_results, real colvector sx2_control, real scalar global_expected_counts){
 
 		// Weights are assumed to sum up to N here
 		
 		Eik = (*LW_results[1]) // copy
 		PSk = (*LW_results[2]) // copy
-		Nik = sum(Nik_obs) * PSk // expected counts
+		if(global_expected_counts){
+			Nik = sum(Nik_obs) * PSk // global expected counts
+		}
+		else{
+		    Nik = Nik_obs // bin-spcific expected counts
+		}
 
 		sx2_min_freq = sx2_control[1]
 		sx2_fixed_K = sx2_control[2]
@@ -7031,8 +7071,13 @@ mata:
 			    Eik_Jacobian_collapsed[ii,.] = Eik_Jacobian_full[i1,.]
 			}
 			else{
-			    Eik_Jacobian_collapsed[ii,.] = ( PSk_collapsed[ii] * colsum( (Eik_full[i1::i2] :* PSk_Jacobian_full[i1::i2,.]) :+ (PSk_full[i1::i2] :* Eik_Jacobian_full[i1::i2,.]) ) 
+			    if(global_expected_counts){
+					Eik_Jacobian_collapsed[ii,.] = ( PSk_collapsed[ii] * colsum( (Eik_full[i1::i2] :* PSk_Jacobian_full[i1::i2,.]) :+ (PSk_full[i1::i2] :* Eik_Jacobian_full[i1::i2,.]) ) 
 												:- colsum( Eik_full[i1::i2] :* PSk_full[i1::i2] ) :* PSk_Jacobian_collapsed[ii,.] ) / PSk_collapsed[ii]^2
+				}
+				else{
+				    Eik_Jacobian_collapsed[ii,.] = colsum(Nik_obs[i1::i2] :* Eik_Jacobian_full[i1::i2,.]) / Nik_obs_collapsed[ii]
+				}
 			}
 			
 		}
